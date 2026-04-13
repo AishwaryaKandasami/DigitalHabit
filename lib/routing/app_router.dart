@@ -11,6 +11,9 @@ import '../features/avatar/presentation/avatar_screen.dart';
 import '../features/dashboard/presentation/kid_dashboard_screen.dart';
 import '../features/dashboard/presentation/parent_dashboard_screen.dart';
 import '../features/family/presentation/family_management_screen.dart';
+import '../features/planner/presentation/weekly_planner_screen.dart';
+import '../features/planner/presentation/day_planner_screen.dart';
+import '../features/planner/presentation/plan_review_screen.dart';
 
 // Placeholder screens for tabs not yet built
 class _PlaceholderScreen extends StatelessWidget {
@@ -37,15 +40,15 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     routes: [
       // Auth routes
-      GoRoute(path: '/', builder: (_, __) => const WelcomeScreen()),
-      GoRoute(path: '/signup', builder: (_, __) => const ParentSignupScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/', builder: (_, _) => const WelcomeScreen()),
+      GoRoute(path: '/signup', builder: (_, _) => const ParentSignupScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
           path: '/join-family',
-          builder: (_, __) => const JoinFamilyScreen()),
+          builder: (_, _) => const JoinFamilyScreen()),
       GoRoute(
           path: '/choose-avatar',
-          builder: (_, __) => const ChooseAvatarScreen()),
+          builder: (_, _) => const ChooseAvatarScreen()),
 
       // Kid shell with bottom nav
       StatefulShellRoute.indexedStack(
@@ -70,24 +73,32 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/kid',
-                builder: (_, __) => const KidDashboardScreen()),
+                builder: (_, _) => const KidDashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/kid/planner',
-                builder: (_, __) =>
-                    const _PlaceholderScreen(title: 'Planner')),
+              path: '/kid/planner',
+              builder: (_, _) => const WeeklyPlannerScreen(),
+              routes: [
+                GoRoute(
+                  path: 'day/:dayName',
+                  builder: (_, state) => DayPlannerScreen(
+                    dayName: state.pathParameters['dayName']!,
+                  ),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/kid/shop',
-                builder: (_, __) =>
+                builder: (_, _) =>
                     const _PlaceholderScreen(title: 'Shop')),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/kid/avatar',
-                builder: (_, __) => const AvatarScreen()),
+                builder: (_, _) => const AvatarScreen()),
           ]),
         ],
       ),
@@ -116,23 +127,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/parent',
-                builder: (_, __) => const ParentDashboardScreen()),
+                builder: (_, _) => const ParentDashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/parent/plans',
-                builder: (_, __) =>
-                    const _PlaceholderScreen(title: 'Plan Reviews')),
+                builder: (_, _) => const PlanReviewScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/parent/family',
-                builder: (_, __) => const FamilyManagementScreen()),
+                builder: (_, _) => const FamilyManagementScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/parent/settings',
-                builder: (_, __) =>
+                builder: (_, _) =>
                     const _PlaceholderScreen(title: 'Settings')),
           ]),
         ],

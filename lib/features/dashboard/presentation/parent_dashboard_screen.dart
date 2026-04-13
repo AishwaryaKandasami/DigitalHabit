@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../../family/providers/family_providers.dart';
 import '../../family/domain/member_model.dart';
+import '../../planner/providers/planner_providers.dart';
 
 class ParentDashboardScreen extends ConsumerWidget {
   const ParentDashboardScreen({super.key});
@@ -13,6 +15,8 @@ class ParentDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final familyAsync = ref.watch(familyProvider);
     final children = ref.watch(childMembersProvider);
+    final pendingAsync = ref.watch(pendingPlansProvider);
+    final pendingCount = pendingAsync.value?.length ?? 0;
 
     return Scaffold(
       body: SafeArea(
@@ -34,30 +38,74 @@ class ParentDashboardScreen extends ConsumerWidget {
               Text('Parent Dashboard', style: AppTextStyles.caption),
               const SizedBox(height: 24),
 
-              // Pending approvals banner (placeholder)
-              Card(
-                color: AppColors.accent.withAlpha(30),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.pending_actions,
-                          color: AppColors.accent),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+              // Pending approvals banner
+              InkWell(
+                onTap: pendingCount > 0
+                    ? () => context.go('/parent/plans')
+                    : null,
+                child: Card(
+                  color: pendingCount > 0
+                      ? AppColors.accentRed.withAlpha(25)
+                      : AppColors.accent.withAlpha(30),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Stack(
                           children: [
-                            Text('No pending plans',
-                                style: AppTextStyles.bodyBold),
-                            Text(
-                              'Plans from your kids will appear here for approval.',
-                              style: AppTextStyles.caption,
+                            Icon(
+                              Icons.pending_actions,
+                              color: pendingCount > 0
+                                  ? AppColors.accentRed
+                                  : AppColors.accent,
                             ),
+                            if (pendingCount > 0)
+                              Positioned(
+                                right: -2,
+                                top: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.accentRed,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '$pendingCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pendingCount > 0
+                                    ? '$pendingCount plan${pendingCount > 1 ? 's' : ''} waiting for approval'
+                                    : 'No pending plans',
+                                style: AppTextStyles.bodyBold,
+                              ),
+                              Text(
+                                pendingCount > 0
+                                    ? 'Tap to review'
+                                    : 'Plans from your kids will appear here for approval.',
+                                style: AppTextStyles.caption,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (pendingCount > 0)
+                          const Icon(Icons.chevron_right,
+                              color: AppColors.accentRed),
+                      ],
+                    ),
                   ),
                 ),
               ),
