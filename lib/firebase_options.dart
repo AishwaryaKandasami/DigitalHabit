@@ -1,9 +1,3 @@
-// TODO: Replace this file by running `flutterfire configure` after creating
-// your Firebase project at https://console.firebase.google.com
-//
-// This placeholder allows the app to compile. You MUST replace it with real
-// Firebase config before running on a device.
-
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -23,30 +17,32 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // Placeholder values - replace with real config from flutterfire configure
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: '1:000000000000:web:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'habit-quest-app',
-    storageBucket: 'habit-quest-app.appspot.com',
-    authDomain: 'habit-quest-app.firebaseapp.com',
+    apiKey: 'AIzaSyC5Q0gKbe1utp43qRcTpkwikh5NiZBOIJ4',
+    appId: '1:485095313131:web:94bce993389bbb0a8938ae',
+    messagingSenderId: '485095313131',
+    projectId: 'habitquest-2b29f',
+    storageBucket: 'habitquest-2b29f.firebasestorage.app',
+    authDomain: 'habitquest-2b29f.firebaseapp.com',
+    measurementId: 'G-7S0WZNNKFD',
   );
 
+  // Android and iOS use the same project — add platform-specific apps
+  // in Firebase Console if you want to build native mobile later.
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: '1:000000000000:android:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'habit-quest-app',
-    storageBucket: 'habit-quest-app.appspot.com',
+    apiKey: 'AIzaSyC5Q0gKbe1utp43qRcTpkwikh5NiZBOIJ4',
+    appId: '1:485095313131:web:94bce993389bbb0a8938ae',
+    messagingSenderId: '485095313131',
+    projectId: 'habitquest-2b29f',
+    storageBucket: 'habitquest-2b29f.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: '1:000000000000:ios:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'habit-quest-app',
-    storageBucket: 'habit-quest-app.appspot.com',
+    apiKey: 'AIzaSyC5Q0gKbe1utp43qRcTpkwikh5NiZBOIJ4',
+    appId: '1:485095313131:web:94bce993389bbb0a8938ae',
+    messagingSenderId: '485095313131',
+    projectId: 'habitquest-2b29f',
+    storageBucket: 'habitquest-2b29f.firebasestorage.app',
     iosBundleId: 'com.habitquest.habitQuest',
   );
 }
