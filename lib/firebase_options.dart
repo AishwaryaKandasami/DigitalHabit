@@ -6,10 +6,11 @@
 
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, TargetPlatform;
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
+    if (kIsWeb) return web;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
@@ -23,6 +24,15 @@ class DefaultFirebaseOptions {
   }
 
   // Placeholder values - replace with real config from flutterfire configure
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'YOUR-API-KEY',
+    appId: '1:000000000000:web:0000000000000000000000',
+    messagingSenderId: '000000000000',
+    projectId: 'habit-quest-app',
+    storageBucket: 'habit-quest-app.appspot.com',
+    authDomain: 'habit-quest-app.firebaseapp.com',
+  );
+
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'YOUR-API-KEY',
     appId: '1:000000000000:android:0000000000000000000000',
