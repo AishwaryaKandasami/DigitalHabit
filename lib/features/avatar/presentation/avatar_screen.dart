@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/game_constants.dart';
 import '../../../core/widgets/xp_bar.dart';
@@ -38,15 +40,43 @@ class AvatarScreen extends ConsumerWidget {
               '${avatar.creatureType.displayName} - ${avatar.evolutionStageName}',
               style: AppTextStyles.caption,
             ),
+            const SizedBox(height: 8),
+
+            // Streak and total XP
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _MiniStat(
+                  icon: Icons.local_fire_department,
+                  color: AppColors.accent,
+                  label: '${member.streakDays} day streak',
+                ),
+                const SizedBox(width: 20),
+                _MiniStat(
+                  icon: Icons.star,
+                  color: AppColors.primary,
+                  label: '${avatar.totalXp} total XP',
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // XP bar
             XpBar(
               currentXp: avatar.xpForCurrentLevel,
-              maxXp: avatar.xpToNextLevel,
+              maxXp: avatar.xpToNextLevel > 0 ? avatar.xpToNextLevel : 1,
               level: avatar.level,
             ),
-            const SizedBox(height: 16),
+            if (avatar.evolutionStage < GameConstants.evolutionXpThresholds.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${GameConstants.evolutionXpThresholds[avatar.evolutionStage] - avatar.totalXp} XP to ${GameConstants.evolutionStageNames[avatar.evolutionStage]}',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.primary),
+                ),
+              ),
+            const SizedBox(height: 20),
 
             // Mood and Health
             Row(
@@ -55,21 +85,13 @@ class AvatarScreen extends ConsumerWidget {
                   child: _StatCard(
                     label: 'Mood',
                     child: MoodIndicator(moodScore: avatar.moodScore),
-                    value: '${avatar.moodScore}/${GameConstants.moodMax}',
+                    value: avatar.moodLabel,
+                    subValue: '${avatar.moodScore}/${GameConstants.moodMax}',
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _StatCard(
-                    label: 'Health',
-                    child: Icon(
-                      Icons.favorite,
-                      color: avatar.health > GameConstants.healthSickThreshold
-                          ? Colors.red
-                          : Colors.grey,
-                    ),
-                    value: '${avatar.health}/${GameConstants.healthMax}',
-                  ),
+                  child: _HealthCard(health: avatar.health),
                 ),
               ],
             ),
@@ -78,10 +100,37 @@ class AvatarScreen extends ConsumerWidget {
             // Evolution timeline
             Text('Evolution Path', style: AppTextStyles.heading3),
             const SizedBox(height: 12),
-            _EvolutionTimeline(currentStage: avatar.evolutionStage),
+            _EvolutionTimeline(
+              currentStage: avatar.evolutionStage,
+              creatureEmoji: avatar.creatureType.emoji,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  const _MiniStat({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 4),
+        Text(label, style: AppTextStyles.caption),
+      ],
     );
   }
 }
@@ -90,11 +139,13 @@ class _StatCard extends StatelessWidget {
   final String label;
   final Widget child;
   final String value;
+  final String? subValue;
 
   const _StatCard({
     required this.label,
     required this.child,
     required this.value,
+    this.subValue,
   });
 
   @override
@@ -108,7 +159,66 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 8),
             child,
             const SizedBox(height: 4),
-            Text(value, style: AppTextStyles.label),
+            Text(value, style: AppTextStyles.bodyBold),
+            if (subValue != null)
+              Text(subValue!, style: AppTextStyles.caption),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthCard extends StatelessWidget {
+  final int health;
+
+  const _HealthCard({required this.health});
+
+  Color get _healthColor {
+    if (health > 70) return AppColors.accentGreen;
+    if (health > 40) return AppColors.accent;
+    if (health > GameConstants.healthSickThreshold) return AppColors.accentRed;
+    return Colors.grey;
+  }
+
+  String get _healthLabel {
+    if (health > 70) return 'Healthy';
+    if (health > 40) return 'Okay';
+    if (health > GameConstants.healthSickThreshold) return 'Weak';
+    return 'Sick';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text('Health', style: AppTextStyles.caption),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: health / GameConstants.healthMax,
+                    strokeWidth: 5,
+                    backgroundColor: AppColors.surfaceVariant,
+                    valueColor: AlwaysStoppedAnimation(_healthColor),
+                  ),
+                  Center(
+                    child: Icon(Icons.favorite, color: _healthColor, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(_healthLabel, style: AppTextStyles.bodyBold),
+            Text('$health/${GameConstants.healthMax}',
+                style: AppTextStyles.caption),
           ],
         ),
       ),
@@ -118,8 +228,12 @@ class _StatCard extends StatelessWidget {
 
 class _EvolutionTimeline extends StatelessWidget {
   final int currentStage;
+  final String creatureEmoji;
 
-  const _EvolutionTimeline({required this.currentStage});
+  const _EvolutionTimeline({
+    required this.currentStage,
+    required this.creatureEmoji,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -129,40 +243,60 @@ class _EvolutionTimeline extends StatelessWidget {
         final stage = i + 1;
         final isReached = stage <= currentStage;
         final isCurrent = stage == currentStage;
-        return Column(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isReached
-                    ? Theme.of(context).colorScheme.primary.withAlpha(isCurrent ? 255 : 100)
-                    : Colors.grey.withAlpha(50),
-                border: isCurrent
-                    ? Border.all(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 3)
-                    : null,
-              ),
-              child: Center(
-                child: Text(
-                  GameConstants.evolutionStageNames[i][0],
-                  style: TextStyle(
-                    color: isReached ? Colors.white : Colors.grey,
-                    fontWeight: FontWeight.bold,
+        final xpNeeded = GameConstants.evolutionXpThresholds[i];
+
+        return Expanded(
+          child: Column(
+            children: [
+              // Connector line (except first)
+              if (i > 0)
+                Container(
+                  height: 2,
+                  color: isReached
+                      ? AppColors.primary.withAlpha(180)
+                      : AppColors.surfaceVariant,
+                ),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isReached
+                      ? AppColors.primary.withAlpha(isCurrent ? 255 : 100)
+                      : AppColors.surfaceVariant,
+                  border: isCurrent
+                      ? Border.all(color: AppColors.accent, width: 3)
+                      : null,
+                ),
+                child: Center(
+                  child: Text(
+                    isCurrent ? creatureEmoji : GameConstants.evolutionStageNames[i][0],
+                    style: TextStyle(
+                      color: isReached ? Colors.white : Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: isCurrent ? 20 : 14,
+                    ),
                   ),
                 ),
+              )
+                  .animate(
+                    target: isCurrent ? 1 : 0,
+                  )
+                  .scaleXY(end: 1.1, duration: 1000.ms, curve: Curves.easeInOut),
+              const SizedBox(height: 4),
+              Text(
+                GameConstants.evolutionStageNames[i],
+                style: AppTextStyles.caption.copyWith(
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 10,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              GameConstants.evolutionStageNames[i],
-              style: AppTextStyles.caption.copyWith(
-                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+              Text(
+                '${xpNeeded}XP',
+                style: AppTextStyles.caption.copyWith(fontSize: 9),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       }),
     );

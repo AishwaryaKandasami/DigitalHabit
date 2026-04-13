@@ -32,6 +32,9 @@ class KidDashboardScreen extends ConsumerWidget {
     final planAsync = ref.watch(currentPlanProvider);
     final logsAsync = ref.watch(todayLogsProvider);
 
+    // Apply mood decay retroactively on dashboard load
+    ref.watch(applyMoodDecayProvider);
+
     if (member == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -285,23 +288,35 @@ class KidDashboardScreen extends ConsumerWidget {
 
     try {
       final repo = ref.read(taskLogRepositoryProvider);
-      await repo.completeTask(
+      final result = await repo.completeTask(
         familyId: appUser.familyId!,
         memberId: appUser.memberId!,
         planId: plan.id,
         date: _todayDate(),
         task: task,
       );
+
+      // Update streak
+      await repo.updateStreak(
+        familyId: appUser.familyId!,
+        memberId: appUser.memberId!,
+        todayDate: _todayDate(),
+      );
+
       ref.invalidate(todayLogsProvider);
 
       if (context.mounted) {
         final reward =
             RewardCalculator.forTaskCompletion(isHealthy: task.isHealthy);
+        final msg = result.leveledUp
+            ? '${task.title} done! Your creature evolved! +${reward.coins} coins, +${reward.xp} XP'
+            : '${task.title} done! +${reward.coins} coins, +${reward.xp} XP';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                '${task.title} done! +${reward.coins} coins, +${reward.xp} XP'),
-            backgroundColor: AppColors.accentGreen,
+            content: Text(msg),
+            backgroundColor: result.leveledUp
+                ? AppColors.accent
+                : AppColors.accentGreen,
             duration: const Duration(seconds: 2),
           ),
         );

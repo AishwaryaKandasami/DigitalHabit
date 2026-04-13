@@ -10,6 +10,8 @@ import '../../planner/providers/planner_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/task_providers.dart';
 import '../domain/reward_calculator.dart';
+import '../data/task_log_repository.dart';
+import '../../../core/constants/game_constants.dart';
 
 class TaskCompletionScreen extends ConsumerWidget {
   const TaskCompletionScreen({super.key});
@@ -172,7 +174,7 @@ class TaskCompletionScreen extends ConsumerWidget {
 
     try {
       final repo = ref.read(taskLogRepositoryProvider);
-      await repo.completeTask(
+      final result = await repo.completeTask(
         familyId: appUser.familyId!,
         memberId: appUser.memberId!,
         planId: plan.id,
@@ -180,12 +182,35 @@ class TaskCompletionScreen extends ConsumerWidget {
         task: task,
       );
 
+      // Update streak
+      await repo.updateStreak(
+        familyId: appUser.familyId!,
+        memberId: appUser.memberId!,
+        todayDate: _todayDate(),
+      );
+
+      // Check full day bonus
+      final dayName = _todayDayName();
+      final totalTasksToday = plan.tasksForDay(dayName).length;
+      final fullDayBonus = await repo.checkFullDayBonus(
+        familyId: appUser.familyId!,
+        memberId: appUser.memberId!,
+        date: _todayDate(),
+        totalTasksToday: totalTasksToday,
+      );
+
       ref.invalidate(todayLogsProvider);
 
       if (context.mounted) {
         final reward =
             RewardCalculator.forTaskCompletion(isHealthy: task.isHealthy);
-        _showRewardToast(context, task.title, reward);
+
+        if (result.leveledUp) {
+          _showEvolutionDialog(context, result);
+        } else {
+          _showRewardToast(context, task.title, reward,
+              fullDayBonus: fullDayBonus);
+        }
       }
     } catch (e) {
       if (context.mounted) {
@@ -197,7 +222,11 @@ class TaskCompletionScreen extends ConsumerWidget {
   }
 
   void _showRewardToast(
-      BuildContext context, String taskTitle, RewardResult reward) {
+    BuildContext context,
+    String taskTitle,
+    RewardResult reward, {
+    RewardResult? fullDayBonus,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -205,14 +234,26 @@ class TaskCompletionScreen extends ConsumerWidget {
         taskTitle: taskTitle,
         coins: reward.coins,
         xp: reward.xp,
+        fullDayBonus: fullDayBonus,
       ),
     );
-    // Auto-dismiss after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 3), () {
       if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     });
+  }
+
+  void _showEvolutionDialog(
+      BuildContext context, TaskCompletionResult result) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _EvolutionDialog(
+        previousStage: result.previousStage,
+        newStage: result.newStage,
+      ),
+    );
   }
 }
 
@@ -281,11 +322,13 @@ class _RewardDialog extends StatelessWidget {
   final String taskTitle;
   final int coins;
   final int xp;
+  final RewardResult? fullDayBonus;
 
   const _RewardDialog({
     required this.taskTitle,
     required this.coins,
     required this.xp,
+    this.fullDayBonus,
   });
 
   @override
@@ -328,12 +371,129 @@ class _RewardDialog extends StatelessWidget {
                 .animate()
                 .fadeIn(delay: 200.ms)
                 .slideY(begin: 0.3, duration: 400.ms),
+            if (fullDayBonus != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentGreen.withAlpha(20),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text('All Tasks Done!',
+                        style: AppTextStyles.bodyBold
+                            .copyWith(color: AppColors.accentGreen)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '+${fullDayBonus!.coins} bonus coins, +${fullDayBonus!.xp} bonus XP',
+                      style: AppTextStyles.caption,
+                    ),
+                  ],
+                ),
+              )
+                  .animate()
+                  .fadeIn(delay: 600.ms)
+                  .slideY(begin: 0.3, duration: 400.ms),
+            ],
           ],
         ),
       )
           .animate()
           .scale(begin: const Offset(0.8, 0.8), duration: 300.ms, curve: Curves.easeOut)
           .fadeIn(duration: 200.ms),
+    );
+  }
+}
+
+class _EvolutionDialog extends StatelessWidget {
+  final int previousStage;
+  final int newStage;
+
+  const _EvolutionDialog({
+    required this.previousStage,
+    required this.newStage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stageName = GameConstants.evolutionStageNames[newStage - 1];
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.accent.withAlpha(100), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent.withAlpha(40),
+              blurRadius: 30,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('✨', style: TextStyle(fontSize: 56))
+                .animate()
+                .scale(
+                  begin: const Offset(0.3, 0.3),
+                  end: const Offset(1.0, 1.0),
+                  duration: 600.ms,
+                  curve: Curves.elasticOut,
+                ),
+            const SizedBox(height: 16),
+            Text('EVOLUTION!', style: AppTextStyles.heading1)
+                .animate()
+                .fadeIn(delay: 300.ms)
+                .shimmer(duration: 1500.ms, color: AppColors.accent),
+            const SizedBox(height: 8),
+            Text(
+              'Your creature evolved to $stageName!',
+              style: AppTextStyles.body,
+              textAlign: TextAlign.center,
+            )
+                .animate()
+                .fadeIn(delay: 500.ms),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  GameConstants.evolutionStageNames[previousStage - 1],
+                  style: AppTextStyles.caption,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(Icons.arrow_forward, color: AppColors.accent),
+                ),
+                Text(
+                  stageName,
+                  style: AppTextStyles.bodyBold
+                      .copyWith(color: AppColors.accent),
+                ),
+              ],
+            )
+                .animate()
+                .fadeIn(delay: 700.ms)
+                .slideX(begin: -0.2, duration: 400.ms),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Awesome!'),
+            )
+                .animate()
+                .fadeIn(delay: 900.ms),
+          ],
+        ),
+      )
+          .animate()
+          .scale(begin: const Offset(0.7, 0.7), duration: 400.ms, curve: Curves.easeOut)
+          .fadeIn(duration: 300.ms),
     );
   }
 }

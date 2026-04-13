@@ -34,3 +34,13 @@ final pendingVerificationProvider = StreamProvider<List<TaskLogModel>>((ref) {
       .read(taskLogRepositoryProvider)
       .streamPendingVerification(appUser!.familyId!);
 });
+
+/// Apply mood decay retroactively on app open. Call once when dashboard loads.
+final applyMoodDecayProvider = FutureProvider<void>((ref) async {
+  final appUser = ref.watch(appUserProvider).value;
+  if (appUser?.familyId == null || appUser?.memberId == null) return;
+  await ref.read(taskLogRepositoryProvider).applyMoodDecay(
+        familyId: appUser!.familyId!,
+        memberId: appUser.memberId!,
+      );
+});

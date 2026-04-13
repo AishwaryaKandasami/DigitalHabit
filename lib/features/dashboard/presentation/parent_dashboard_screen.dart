@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/game_constants.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../../family/providers/family_providers.dart';
 import '../../family/domain/member_model.dart';
 import '../../planner/providers/planner_providers.dart';
+import '../../tasks/providers/task_providers.dart';
 
 class ParentDashboardScreen extends ConsumerWidget {
   const ParentDashboardScreen({super.key});
@@ -15,8 +17,10 @@ class ParentDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final familyAsync = ref.watch(familyProvider);
     final children = ref.watch(childMembersProvider);
-    final pendingAsync = ref.watch(pendingPlansProvider);
-    final pendingCount = pendingAsync.value?.length ?? 0;
+    final pendingPlansAsync = ref.watch(pendingPlansProvider);
+    final pendingPlansCount = pendingPlansAsync.value?.length ?? 0;
+    final pendingVerifyAsync = ref.watch(pendingVerificationProvider);
+    final pendingVerifyCount = pendingVerifyAsync.value?.length ?? 0;
 
     return Scaffold(
       body: SafeArea(
@@ -38,76 +42,31 @@ class ParentDashboardScreen extends ConsumerWidget {
               Text('Parent Dashboard', style: AppTextStyles.caption),
               const SizedBox(height: 24),
 
-              // Pending approvals banner
-              InkWell(
-                onTap: pendingCount > 0
-                    ? () => context.go('/parent/plans')
-                    : null,
-                child: Card(
-                  color: pendingCount > 0
-                      ? AppColors.accentRed.withAlpha(25)
-                      : AppColors.accent.withAlpha(30),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Stack(
-                          children: [
-                            Icon(
-                              Icons.pending_actions,
-                              color: pendingCount > 0
-                                  ? AppColors.accentRed
-                                  : AppColors.accent,
-                            ),
-                            if (pendingCount > 0)
-                              Positioned(
-                                right: -2,
-                                top: -2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accentRed,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '$pendingCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                pendingCount > 0
-                                    ? '$pendingCount plan${pendingCount > 1 ? 's' : ''} waiting for approval'
-                                    : 'No pending plans',
-                                style: AppTextStyles.bodyBold,
-                              ),
-                              Text(
-                                pendingCount > 0
-                                    ? 'Tap to review'
-                                    : 'Plans from your kids will appear here for approval.',
-                                style: AppTextStyles.caption,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (pendingCount > 0)
-                          const Icon(Icons.chevron_right,
-                              color: AppColors.accentRed),
-                      ],
+              // Action banners row
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionBanner(
+                      icon: Icons.pending_actions,
+                      count: pendingPlansCount,
+                      label: 'Plans to review',
+                      emptyLabel: 'No pending plans',
+                      color: AppColors.primary,
+                      onTap: () => context.go('/parent/plans'),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ActionBanner(
+                      icon: Icons.verified_user,
+                      count: pendingVerifyCount,
+                      label: 'Tasks to verify',
+                      emptyLabel: 'All verified',
+                      color: AppColors.accentGreen,
+                      onTap: () => context.go('/parent/verify'),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
@@ -141,9 +100,7 @@ class ParentDashboardScreen extends ConsumerWidget {
                   ),
                 )
               else
-                ...children
-                    .map((child) => _ChildSummaryCard(child: child))
-                    .toList(),
+                ...children.map((child) => _ChildProgressCard(child: child)),
             ],
           ),
         ),
@@ -152,89 +109,238 @@ class ParentDashboardScreen extends ConsumerWidget {
   }
 }
 
-class _ChildSummaryCard extends StatelessWidget {
+class _ActionBanner extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  final String label;
+  final String emptyLabel;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionBanner({
+    required this.icon,
+    required this.count,
+    required this.label,
+    required this.emptyLabel,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasItems = count > 0;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        color: hasItems ? color.withAlpha(20) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, color: hasItems ? color : AppColors.textSecondary),
+                  if (hasItems)
+                    Positioned(
+                      right: -8,
+                      top: -8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasItems ? '$count $label' : emptyLabel,
+                style: AppTextStyles.caption,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChildProgressCard extends StatelessWidget {
   final MemberModel child;
 
-  const _ChildSummaryCard({required this.child});
+  const _ChildProgressCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
     final avatar = child.avatarState;
+    final moodColor = avatar.moodScore >= GameConstants.moodHappyThreshold
+        ? AppColors.moodHappy
+        : avatar.moodScore >= GameConstants.moodNeutralThreshold
+            ? AppColors.moodNeutral
+            : avatar.moodScore >= GameConstants.moodSadThreshold
+                ? AppColors.moodSad
+                : AppColors.moodSick;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
           children: [
-            // Avatar mini
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: avatar.creatureType.color.withAlpha(30),
-              ),
-              child: Center(
-                child: Text(
-                  avatar.creatureType.emoji,
-                  style: const TextStyle(fontSize: 30),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(child.displayName, style: AppTextStyles.bodyBold),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Level ${avatar.level} ${avatar.creatureType.displayName}',
-                    style: AppTextStyles.caption,
+            Row(
+              children: [
+                // Avatar mini
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: avatar.creatureType.color.withAlpha(30),
+                    border: Border.all(
+                      color: moodColor.withAlpha(100),
+                      width: 2,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  child: Center(
+                    child: Text(
+                      avatar.evolutionStage == 1
+                          ? '🥚'
+                          : avatar.creatureType.emoji,
+                      style: const TextStyle(fontSize: 26),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Name + stage
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.local_fire_department,
-                          size: 14, color: AppColors.accent),
-                      const SizedBox(width: 2),
-                      Text('${child.streakDays}d',
-                          style: AppTextStyles.caption),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.monetization_on,
-                          size: 14, color: AppColors.accent),
-                      const SizedBox(width: 2),
-                      Text('${child.wallet.coins}',
-                          style: AppTextStyles.caption),
+                      Text(child.displayName, style: AppTextStyles.bodyBold),
+                      Text(
+                        'Lv.${avatar.level} ${avatar.evolutionStageName} ${avatar.creatureType.displayName}',
+                        style: AppTextStyles.caption,
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                // Coins
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withAlpha(25),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.monetization_on,
+                          size: 16, color: AppColors.accent),
+                      const SizedBox(width: 4),
+                      Text('${child.wallet.coins}',
+                          style: AppTextStyles.caption
+                              .copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            // Today's progress placeholder
-            SizedBox(
-              width: 50,
-              height: 50,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: 0,
-                    strokeWidth: 4,
-                    backgroundColor: AppColors.surfaceVariant,
-                    valueColor:
-                        const AlwaysStoppedAnimation(AppColors.accentGreen),
-                  ),
-                  Center(
-                    child:
-                        Text('0%', style: AppTextStyles.caption),
-                  ),
-                ],
+            const SizedBox(height: 12),
+
+            // Stats row
+            Row(
+              children: [
+                // Streak
+                _SmallStat(
+                  icon: Icons.local_fire_department,
+                  color: AppColors.accent,
+                  value: '${child.streakDays}',
+                  label: 'Streak',
+                ),
+                _SmallStat(
+                  icon: Icons.star,
+                  color: AppColors.primary,
+                  value: '${avatar.totalXp}',
+                  label: 'XP',
+                ),
+                _SmallStat(
+                  icon: Icons.emoji_emotions,
+                  color: moodColor,
+                  value: avatar.moodLabel,
+                  label: 'Mood',
+                ),
+                _SmallStat(
+                  icon: Icons.favorite,
+                  color: avatar.health > 50
+                      ? AppColors.accentGreen
+                      : AppColors.accentRed,
+                  value: '${avatar.health}%',
+                  label: 'Health',
+                ),
+              ],
+            ),
+
+            // XP progress bar
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: avatar.xpToNextLevel > 0
+                    ? (avatar.xpForCurrentLevel / avatar.xpToNextLevel)
+                        .clamp(0.0, 1.0)
+                    : 1.0,
+                minHeight: 4,
+                backgroundColor: AppColors.surfaceVariant,
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SmallStat extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+
+  const _SmallStat({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 2),
+          Text(value,
+              style: AppTextStyles.caption
+                  .copyWith(fontWeight: FontWeight.bold)),
+          Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10)),
+        ],
       ),
     );
   }
