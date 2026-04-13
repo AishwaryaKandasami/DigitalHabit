@@ -1,0 +1,193 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/loading_widget.dart';
+import '../../family/providers/family_providers.dart';
+import '../../family/domain/member_model.dart';
+
+class ParentDashboardScreen extends ConsumerWidget {
+  const ParentDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final familyAsync = ref.watch(familyProvider);
+    final children = ref.watch(childMembersProvider);
+
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              familyAsync.when(
+                loading: () => const LoadingWidget(),
+                error: (e, _) => Text('Error: $e'),
+                data: (family) => Text(
+                  family?.name ?? 'My Family',
+                  style: AppTextStyles.heading1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text('Parent Dashboard', style: AppTextStyles.caption),
+              const SizedBox(height: 24),
+
+              // Pending approvals banner (placeholder)
+              Card(
+                color: AppColors.accent.withAlpha(30),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.pending_actions,
+                          color: AppColors.accent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('No pending plans',
+                                style: AppTextStyles.bodyBold),
+                            Text(
+                              'Plans from your kids will appear here for approval.',
+                              style: AppTextStyles.caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Children overview
+              Text('Your Kids', style: AppTextStyles.heading3),
+              const SizedBox(height: 12),
+              if (children.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.child_care,
+                              size: 48,
+                              color: AppColors.textSecondary.withAlpha(100)),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No kids have joined yet',
+                            style: AppTextStyles.body
+                                .copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Share your family invite code to get started!',
+                            style: AppTextStyles.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ...children
+                    .map((child) => _ChildSummaryCard(child: child))
+                    .toList(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChildSummaryCard extends StatelessWidget {
+  final MemberModel child;
+
+  const _ChildSummaryCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = child.avatarState;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Avatar mini
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: avatar.creatureType.color.withAlpha(30),
+              ),
+              child: Center(
+                child: Text(
+                  avatar.creatureType.emoji,
+                  style: const TextStyle(fontSize: 30),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(child.displayName, style: AppTextStyles.bodyBold),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Level ${avatar.level} ${avatar.creatureType.displayName}',
+                    style: AppTextStyles.caption,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.local_fire_department,
+                          size: 14, color: AppColors.accent),
+                      const SizedBox(width: 2),
+                      Text('${child.streakDays}d',
+                          style: AppTextStyles.caption),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.monetization_on,
+                          size: 14, color: AppColors.accent),
+                      const SizedBox(width: 2),
+                      Text('${child.wallet.coins}',
+                          style: AppTextStyles.caption),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Today's progress placeholder
+            SizedBox(
+              width: 50,
+              height: 50,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: 0,
+                    strokeWidth: 4,
+                    backgroundColor: AppColors.surfaceVariant,
+                    valueColor:
+                        const AlwaysStoppedAnimation(AppColors.accentGreen),
+                  ),
+                  Center(
+                    child:
+                        Text('0%', style: AppTextStyles.caption),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
