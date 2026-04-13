@@ -1,5 +1,6 @@
 import '../../avatar/domain/avatar_state.dart';
 import '../../auth/domain/app_user.dart';
+import '../../shop/domain/inventory_model.dart';
 
 class MemberModel {
   final String id;
@@ -8,6 +9,7 @@ class MemberModel {
   final String? authUid;
   final AvatarState avatarState;
   final Wallet wallet;
+  final InventoryModel inventory;
   final int streakDays;
   final String? lastActiveDate;
 
@@ -18,6 +20,7 @@ class MemberModel {
     this.authUid,
     required this.avatarState,
     required this.wallet,
+    this.inventory = const InventoryModel(),
     this.streakDays = 0,
     this.lastActiveDate,
   });
@@ -28,6 +31,7 @@ class MemberModel {
         'authUid': authUid,
         'avatarState': avatarState.toMap(),
         'wallet': wallet.toMap(),
+        'inventory': inventory.toList(),
         'streakDays': streakDays,
         'lastActiveDate': lastActiveDate,
       };
@@ -42,6 +46,8 @@ class MemberModel {
             map['avatarState'] as Map<String, dynamic>? ?? {}),
         wallet:
             Wallet.fromMap(map['wallet'] as Map<String, dynamic>? ?? {}),
+        inventory:
+            InventoryModel.fromList(map['inventory'] as List<dynamic>?),
         streakDays: map['streakDays'] as int? ?? 0,
         lastActiveDate: map['lastActiveDate'] as String?,
       );
@@ -50,6 +56,7 @@ class MemberModel {
     String? displayName,
     AvatarState? avatarState,
     Wallet? wallet,
+    InventoryModel? inventory,
     int? streakDays,
     String? lastActiveDate,
   }) {
@@ -60,6 +67,7 @@ class MemberModel {
       authUid: authUid,
       avatarState: avatarState ?? this.avatarState,
       wallet: wallet ?? this.wallet,
+      inventory: inventory ?? this.inventory,
       streakDays: streakDays ?? this.streakDays,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
     );

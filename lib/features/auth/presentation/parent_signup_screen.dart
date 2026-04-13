@@ -6,6 +6,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../providers/auth_providers.dart';
 import '../../family/providers/family_providers.dart';
+import '../../shop/providers/shop_providers.dart';
 import '../domain/app_user.dart';
 
 class ParentSignupScreen extends ConsumerStatefulWidget {
@@ -62,7 +63,10 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
         authUid: user.uid,
       );
 
-      // 4. Save user profile mapping
+      // 4. Seed shop items for the new family
+      await ref.read(shopRepositoryProvider).seedShopItems(family.id);
+
+      // 5. Save user profile mapping
       await authRepo.saveUserProfile(AppUser(
         uid: user.uid,
         email: user.email,
@@ -71,7 +75,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
         role: UserRole.parent,
       ));
 
-      // 5. Invalidate providers so they refetch
+      // 6. Invalidate providers so they refetch
       ref.invalidate(appUserProvider);
 
       if (mounted) context.go('/parent');

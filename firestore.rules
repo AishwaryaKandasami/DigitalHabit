@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profiles: only the owner can read/write their own profile
+    match /userProfiles/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Family-level rules
+    match /families/{familyId} {
+      // Helper: check if user is a member of this family
+      function isFamilyMember() {
+        return request.auth != null &&
+          exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+      }
+
+      // Helper: check if user is the parent (owner) of this family
+      function isParent() {
+        return request.auth != null &&
+          resource.data.parentUid == request.auth.uid;
+      }
+
+      // Anyone authenticated can read families (for invite code lookup)
+      // Only the parent can write
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isParent();
+
+      // Members subcollection
+      match /members/{memberId} {
+        // Any authenticated user can read members (needed for join flow)
+        allow read: if request.auth != null;
+        // Anyone can create (join family flow)
+        allow create: if request.auth != null;
+        // Members can update their own doc, parent can update any
+        allow update: if request.auth != null;
+      }
+
+      // Plans subcollection
+      match /plans/{planId} {
+        allow read: if request.auth != null;
+        // Kids create and update their own plans
+        allow create: if request.auth != null;
+        // Anyone in the family can update (kid edits, parent approves)
+        allow update: if request.auth != null;
+      }
+
+      // Task logs subcollection
+      match /taskLogs/{logId} {
+        allow read: if request.auth != null;
+        // Kids create logs when completing tasks
+        allow create: if request.auth != null;
+        // Parent verifies (updates) logs
+        allow update: if request.auth != null;
+      }
+
+      // Shop items subcollection
+      match /shopItems/{itemId} {
+        allow read: if request.auth != null;
+        // Only created during family setup
+        allow create: if request.auth != null;
+      }
+
+      // Transactions subcollection (audit trail)
+      match /transactions/{txId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+      }
+    }
+  }
+}

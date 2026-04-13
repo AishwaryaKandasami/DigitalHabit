@@ -16,23 +16,7 @@ import '../features/planner/presentation/day_planner_screen.dart';
 import '../features/planner/presentation/plan_review_screen.dart';
 import '../features/tasks/presentation/task_completion_screen.dart';
 import '../features/tasks/presentation/task_verification_screen.dart';
-
-// Placeholder screens for tabs not yet built
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text('$title - Coming Soon!',
-            style: Theme.of(context).textTheme.headlineSmall),
-      ),
-    );
-  }
-}
+import '../features/shop/presentation/shop_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -101,8 +85,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/kid/shop',
-                builder: (_, _) =>
-                    const _PlaceholderScreen(title: 'Shop')),
+                builder: (_, _) => const ShopScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
