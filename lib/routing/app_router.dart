@@ -14,6 +14,8 @@ import '../features/family/presentation/family_management_screen.dart';
 import '../features/planner/presentation/weekly_planner_screen.dart';
 import '../features/planner/presentation/day_planner_screen.dart';
 import '../features/planner/presentation/plan_review_screen.dart';
+import '../features/tasks/presentation/task_completion_screen.dart';
+import '../features/tasks/presentation/task_verification_screen.dart';
 
 // Placeholder screens for tabs not yet built
 class _PlaceholderScreen extends StatelessWidget {
@@ -72,8 +74,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         branches: [
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/kid',
-                builder: (_, _) => const KidDashboardScreen()),
+              path: '/kid',
+              builder: (_, _) => const KidDashboardScreen(),
+              routes: [
+                GoRoute(
+                  path: 'tasks',
+                  builder: (_, _) => const TaskCompletionScreen(),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
@@ -118,7 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 NavigationDestination(
                     icon: Icon(Icons.family_restroom), label: 'Family'),
                 NavigationDestination(
-                    icon: Icon(Icons.settings), label: 'Settings'),
+                    icon: Icon(Icons.verified_user), label: 'Verify'),
               ],
             ),
           );
@@ -141,9 +150,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/parent/settings',
-                builder: (_, _) =>
-                    const _PlaceholderScreen(title: 'Settings')),
+                path: '/parent/verify',
+                builder: (_, _) => const TaskVerificationScreen()),
           ]),
         ],
       ),
