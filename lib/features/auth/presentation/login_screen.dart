@@ -6,7 +6,6 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../providers/auth_providers.dart';
 
-
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -48,7 +47,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
       if (appUser == null) {
-        setState(() => _error = 'Profile not found. Please sign up first.');
+        // Profile missing but auth succeeded — send to signup to complete setup
+        setState(() => _error =
+            'Account exists but family not set up yet. Please sign up to complete setup.');
         return;
       }
 
@@ -58,10 +59,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go('/kid');
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _friendlyError(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _friendlyError(String error) {
+    if (error.contains('wrong-password') ||
+        error.contains('invalid-credential')) {
+      return 'Wrong email or password. Please try again.';
+    }
+    if (error.contains('user-not-found')) {
+      return 'No account found with this email. Please sign up first.';
+    }
+    if (error.contains('too-many-requests')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    if (error.contains('invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (error.contains('network-request-failed')) {
+      return 'Network error. Please check your internet connection.';
+    }
+    return error;
   }
 
   @override
@@ -111,6 +132,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ElevatedButton(
                       onPressed: _login,
                       child: const Text('Log In'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => context.go('/signup'),
+                      child: const Text("Don't have an account? Sign up"),
                     ),
                   ],
                 ),

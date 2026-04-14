@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,11 +44,41 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
       final authRepo = ref.read(authRepositoryProvider);
       final familyRepo = ref.read(familyRepositoryProvider);
 
-      // 1. Create Firebase Auth account
-      final user = await authRepo.signUpParent(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      User user;
+      try {
+        // 1. Try creating a new account
+        user = await authRepo.signUpParent(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          // Account exists — try signing in instead
+          try {
+            user = await authRepo.signIn(
+              _emailController.text.trim(),
+              _passwordController.text,
+            );
+
+            // Check if they already have a profile
+            final existing = await authRepo.getUserProfile(user.uid);
+            if (existing != null && existing.familyId != null) {
+              // Already fully set up — just go to dashboard
+              ref.invalidate(appUserProvider);
+              await ref.read(appUserProvider.future);
+              if (mounted) context.go('/parent');
+              return;
+            }
+            // Profile missing — continue to create family below
+          } catch (_) {
+            setState(() => _error =
+                'This email is already registered. Try logging in with the correct password.');
+            return;
+          }
+        } else {
+          rethrow;
+        }
+      }
 
       // 2. Create family in Firestore
       final family = await familyRepo.createFamily(
@@ -81,18 +112,31 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
 
       if (mounted) context.go('/parent');
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _friendlyError(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  String _friendlyError(String error) {
+    if (error.contains('email-already-in-use')) {
+      return 'This email is already registered. Try logging in instead.';
+    }
+    if (error.contains('weak-password')) {
+      return 'Password is too weak. Use at least 6 characters.';
+    }
+    if (error.contains('invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    return error;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(title: const Text('Parent Sign Up')),
       body: _isLoading
-          ? const LoadingWidget(message: 'Creating your family...')
+          ? const LoadingWidget(message: 'Setting up your family...')
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Form(
@@ -100,25 +144,14 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Welcome, Parent!', style: AppTextStyles.heading2),
+                    Text('Create Your Family', style: AppTextStyles.heading2),
                     const SizedBox(height: 8),
                     Text(
-                      'Set up your family to get started.',
+                      'Set up your account and family to get started.',
                       style: AppTextStyles.body
                           .copyWith(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 32),
-                    TextFormField(
-                      controller: _familyNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Family Name',
-                        hintText: 'e.g. The Sharma Family',
-                        prefixIcon: Icon(Icons.family_restroom),
-                      ),
-                      validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _emailController,
                       decoration: const InputDecoration(
@@ -126,17 +159,15 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                       keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        if (!v.contains('@')) return 'Invalid email';
-                        return null;
-                      },
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _passwordController,
                       decoration: const InputDecoration(
                         labelText: 'Password',
+                        hintText: 'At least 6 characters',
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
                       obscureText: true,
@@ -145,6 +176,17 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                         if (v.length < 6) return 'At least 6 characters';
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _familyNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Family Name',
+                        hintText: 'e.g. The Smiths',
+                        prefixIcon: Icon(Icons.family_restroom),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
@@ -157,6 +199,11 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                     ElevatedButton(
                       onPressed: _signUp,
                       child: const Text('Create Family'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      child: const Text('Already have an account? Log in'),
                     ),
                   ],
                 ),

@@ -1,13 +1,18 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../providers/auth_providers.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -63,6 +68,22 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              // Show sign out if user is stuck in a logged-in state
+              if (firebaseUser != null) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () async {
+                    await ref.read(authRepositoryProvider).signOut();
+                    ref.invalidate(appUserProvider);
+                    ref.invalidate(authStateProvider);
+                  },
+                  child: Text(
+                    'Sign out (${firebaseUser.email ?? 'anonymous'})',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.accentRed),
+                  ),
+                ),
+              ],
               const Spacer(),
             ],
           ),
