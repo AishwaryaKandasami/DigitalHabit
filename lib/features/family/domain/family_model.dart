@@ -7,6 +7,7 @@ class FamilyModel {
   final String inviteCode;
   final DateTime createdAt;
   final FamilySettings settings;
+  final List<String> customCategories;
 
   const FamilyModel({
     required this.id,
@@ -15,6 +16,7 @@ class FamilyModel {
     required this.inviteCode,
     required this.createdAt,
     required this.settings,
+    this.customCategories = const [],
   });
 
   Map<String, dynamic> toMap() => {
@@ -23,6 +25,7 @@ class FamilyModel {
         'inviteCode': inviteCode,
         'createdAt': Timestamp.fromDate(createdAt),
         'settings': settings.toMap(),
+        'customCategories': customCategories,
       };
 
   factory FamilyModel.fromMap(String id, Map<String, dynamic> map) =>
@@ -34,6 +37,9 @@ class FamilyModel {
         createdAt: (map['createdAt'] as Timestamp).toDate(),
         settings: FamilySettings.fromMap(
             map['settings'] as Map<String, dynamic>? ?? {}),
+        customCategories: (map['customCategories'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .toList(),
       );
 }
 

@@ -226,7 +226,7 @@ class KidDashboardScreen extends ConsumerWidget {
                 ...todayTasks.take(5).map((task) {
                   final isDone = completedTaskIds.contains(task.taskId);
                   final timeStr =
-                      '${task.hour.toString().padLeft(2, '0')}:00';
+                      '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     color: isDone

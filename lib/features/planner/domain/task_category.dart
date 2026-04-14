@@ -8,7 +8,8 @@ enum TaskCategory {
   creative('Creative', Icons.palette, AppColors.creative, true),
   social('Social', Icons.people, AppColors.social, true),
   screenTime('Screen Time', Icons.phone_android, AppColors.screenTime, false),
-  sleep('Sleep', Icons.bedtime, AppColors.sleep, true);
+  sleep('Sleep', Icons.bedtime, AppColors.sleep, true),
+  custom('Custom', Icons.star, AppColors.accent, true);
 
   final String displayName;
   final IconData icon;

@@ -34,7 +34,7 @@ class DayPlannerScreen extends ConsumerWidget {
     }
 
     final tasks = List<TaskModel>.from(draft.tasksForDay(dayName))
-      ..sort((a, b) => a.hour.compareTo(b.hour));
+      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
     final isEditable = draft.isEditable;
 
     return Scaffold(
@@ -55,7 +55,8 @@ class DayPlannerScreen extends ConsumerWidget {
               isEditable: isEditable,
               onTapTask: (task) => _editTask(context, ref, task),
               onDeleteTask: (task) => _deleteTask(ref, task),
-              onAddAtHour: (hour) => _addTask(context, ref, initialHour: hour),
+              onAddAt: (hour, minute) =>
+                  _addTask(context, ref, initialHour: hour, initialMinute: minute),
             ),
     );
   }
@@ -64,12 +65,16 @@ class DayPlannerScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref, {
     int initialHour = 8,
+    int initialMinute = 0,
   }) async {
     final task = await showModalBottomSheet<TaskModel>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddTaskSheet(initialHour: initialHour),
+      builder: (_) => AddTaskSheet(
+        initialHour: initialHour,
+        initialMinute: initialMinute,
+      ),
     );
     if (task == null) return;
     _updateDraftWithTask(ref, task);
@@ -157,22 +162,26 @@ class _HourlyGrid extends StatelessWidget {
   final bool isEditable;
   final void Function(TaskModel) onTapTask;
   final void Function(TaskModel) onDeleteTask;
-  final void Function(int hour) onAddAtHour;
+  final void Function(int hour, int minute) onAddAt;
 
   const _HourlyGrid({
     required this.tasks,
     required this.isEditable,
     required this.onTapTask,
     required this.onDeleteTask,
-    required this.onAddAtHour,
+    required this.onAddAt,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Build a map of hour -> tasks for quick lookup
+    // Bucket tasks by hour so each hour row shows its tasks sorted by minute.
     final tasksByHour = <int, List<TaskModel>>{};
     for (final task in tasks) {
       tasksByHour.putIfAbsent(task.hour, () => []).add(task);
+    }
+    // Sort each hour's tasks by minute
+    for (final list in tasksByHour.values) {
+      list.sort((a, b) => a.minute.compareTo(b.minute));
     }
 
     return ListView.builder(
@@ -180,74 +189,85 @@ class _HourlyGrid extends StatelessWidget {
       itemCount: 17, // 6 AM to 10 PM
       itemBuilder: (context, index) {
         final hour = index + 6;
-        final hourTasks = tasksByHour[hour] ?? [];
+        final hourTasks = tasksByHour[hour] ?? const [];
         final timeStr = '${hour.toString().padLeft(2, '0')}:00';
 
-        return InkWell(
-          onTap: isEditable && hourTasks.isEmpty
-              ? () => onAddAtHour(hour)
-              : null,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 60),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.surfaceVariant,
-                  width: 0.5,
-                ),
+        return Container(
+          constraints: const BoxConstraints(minHeight: 60),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: AppColors.surfaceVariant,
+                width: 0.5,
               ),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Time column
-                SizedBox(
-                  width: 60,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 8),
-                    child: Text(
-                      timeStr,
-                      style: AppTextStyles.caption.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: hourTasks.isNotEmpty
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
-                      ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Time column
+              SizedBox(
+                width: 60,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 8),
+                  child: Text(
+                    timeStr,
+                    style: AppTextStyles.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: hourTasks.isNotEmpty
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
                     ),
                   ),
                 ),
-                // Divider line
-                Container(
-                  width: 2,
-                  constraints: const BoxConstraints(minHeight: 60),
-                  color: hourTasks.isNotEmpty
-                      ? AppColors.primary.withAlpha(100)
-                      : AppColors.surfaceVariant,
-                ),
-                // Task cards
-                Expanded(
-                  child: hourTasks.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: isEditable
-                              ? Text('Tap to add',
-                                  style: AppTextStyles.caption
-                                      .copyWith(fontStyle: FontStyle.italic))
-                              : const SizedBox.shrink(),
-                        )
-                      : Column(
-                          children: hourTasks
-                              .map((task) => _TaskCard(
-                                    task: task,
-                                    isEditable: isEditable,
-                                    onTap: () => onTapTask(task),
-                                    onDelete: () => onDeleteTask(task),
-                                  ))
-                              .toList(),
+              ),
+              // Divider line
+              Container(
+                width: 2,
+                constraints: const BoxConstraints(minHeight: 60),
+                color: hourTasks.isNotEmpty
+                    ? AppColors.primary.withAlpha(100)
+                    : AppColors.surfaceVariant,
+              ),
+              // Task cards + add button
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ...hourTasks.map((task) => _TaskCard(
+                          task: task,
+                          isEditable: isEditable,
+                          onTap: () => onTapTask(task),
+                          onDelete: () => onDeleteTask(task),
+                        )),
+                    if (isEditable)
+                      InkWell(
+                        onTap: () => onAddAt(hour, 0),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Icon(Icons.add,
+                                  size: 16,
+                                  color: AppColors.textSecondary),
+                              const SizedBox(width: 6),
+                              Text(
+                                hourTasks.isEmpty
+                                    ? 'Tap to add at $timeStr'
+                                    : 'Add another at this hour',
+                                style: AppTextStyles.caption.copyWith(
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -270,6 +290,8 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final timeStr =
+        '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Material(
@@ -291,7 +313,7 @@ class _TaskCard extends StatelessWidget {
                     children: [
                       Text(task.title, style: AppTextStyles.bodyBold),
                       Text(
-                        '${task.duration} min  •  ${task.category.displayName}',
+                        '$timeStr  •  ${task.duration} min  •  ${task.categoryDisplayName}',
                         style: AppTextStyles.caption,
                       ),
                     ],

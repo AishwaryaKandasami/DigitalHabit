@@ -270,7 +270,8 @@ class _TaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = '${task.hour.toString().padLeft(2, '0')}:00';
+    final timeStr =
+        '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),

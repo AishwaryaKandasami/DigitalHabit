@@ -135,4 +135,25 @@ class FamilyRepository {
         .doc(memberId)
         .update(data);
   }
+
+  /// Add a custom category name to the family's category list.
+  Future<void> addCustomCategory(String familyId, String categoryName) async {
+    await _firestore
+        .collection(FirestorePaths.families)
+        .doc(familyId)
+        .update({
+      'customCategories': FieldValue.arrayUnion([categoryName]),
+    });
+  }
+
+  /// Remove a custom category name from the family's category list.
+  Future<void> removeCustomCategory(
+      String familyId, String categoryName) async {
+    await _firestore
+        .collection(FirestorePaths.families)
+        .doc(familyId)
+        .update({
+      'customCategories': FieldValue.arrayRemove([categoryName]),
+    });
+  }
 }

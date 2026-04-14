@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
@@ -41,19 +42,17 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     super.dispose();
   }
 
-  Future<void> _ensureDraftPlan() async {
+  /// Sync draft plan from Firestore existing plan (or create empty).
+  void _syncDraftFromExisting(PlanModel? existingPlan) {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser == null) return;
-
+    if (appUser?.memberId == null) return;
     final weekStart = ref.read(selectedWeekStartProvider);
-    final existingPlan = ref.read(currentPlanProvider).value;
 
     if (existingPlan != null) {
       ref.read(draftPlanProvider.notifier).set(existingPlan);
     } else {
-      // Create a new empty draft
       final draft = PlanModel.empty(
-        memberId: appUser.memberId!,
+        memberId: appUser!.memberId!,
         weekStart: weekStart,
       );
       ref.read(draftPlanProvider.notifier).set(draft);
@@ -99,26 +98,84 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     }
   }
 
+  void _changeWeek(int deltaDays) {
+    final current = ref.read(selectedWeekStartProvider);
+    final parsed = DateTime.parse(current);
+    final next = parsed.add(Duration(days: deltaDays));
+    _setWeek(next);
+  }
+
+  Future<void> _pickWeekDate() async {
+    final current = ref.read(selectedWeekStartProvider);
+    final parsed = DateTime.parse(current);
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: parsed,
+      firstDate: today.subtract(const Duration(days: 365)),
+      lastDate: today.add(const Duration(days: 365)),
+      helpText: 'Pick any day in the week',
+    );
+    if (picked != null) {
+      _setWeek(picked);
+    }
+  }
+
+  void _setWeek(DateTime anyDayInWeek) {
+    // Snap to Monday of that week.
+    final monday =
+        anyDayInWeek.subtract(Duration(days: anyDayInWeek.weekday - 1));
+    final iso =
+        '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
+    // Clear draft so it re-syncs for the new week.
+    ref.read(draftPlanProvider.notifier).set(null);
+    ref.read(selectedWeekStartProvider.notifier).set(iso);
+  }
+
+  bool _needsSync(PlanModel? existing, PlanModel? draft) {
+    if (draft == null) return true;
+    // Different week → re-sync
+    if (existing != null && existing.weekStart != draft.weekStart) return true;
+    if (existing == null) {
+      // No existing plan for this week: draft should be empty for the selected
+      // week. Any mismatch in weekStart is handled above.
+      return false;
+    }
+    // If existing Firestore state changed (status/parentNote/id), re-sync so
+    // the kid sees parent's updates (e.g. revision notes).
+    if (existing.id != draft.id) return true;
+    if (existing.status != draft.status) return true;
+    if ((existing.parentNote ?? '') != (draft.parentNote ?? '')) return true;
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final planAsync = ref.watch(currentPlanProvider);
     final draft = ref.watch(draftPlanProvider);
+    final weekStart = ref.watch(selectedWeekStartProvider);
 
     return planAsync.when(
       loading: () =>
           const Scaffold(body: LoadingWidget(message: 'Loading plan...')),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (existingPlan) {
-        // Initialize draft if needed
-        if (draft == null) {
+        // Re-sync draft whenever Firestore state diverges — ensures parent
+        // revision notes & approvals reach the kid, and week changes reset
+        // the draft.
+        if (_needsSync(existingPlan, draft)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _ensureDraftPlan();
+            _syncDraftFromExisting(existingPlan);
           });
           return const Scaffold(body: LoadingWidget());
         }
 
-        final plan = draft;
+        final plan = draft!;
         final isEditable = plan.isEditable;
+
+        // Use Firestore plan as source of truth for status banner (falls back
+        // to draft for brand-new/unsaved plans).
+        final bannerPlan = existingPlan ?? plan;
 
         return Scaffold(
           appBar: AppBar(
@@ -156,8 +213,19 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
           ),
           body: Column(
             children: [
-              // Status banner
-              _StatusBanner(status: plan.status, parentNote: plan.parentNote),
+              // Week navigation header
+              _WeekNavigator(
+                weekStart: weekStart,
+                onPrev: () => _changeWeek(-7),
+                onNext: () => _changeWeek(7),
+                onPick: _pickWeekDate,
+              ),
+
+              // Status banner (from Firestore source of truth)
+              _StatusBanner(
+                status: bannerPlan.status,
+                parentNote: bannerPlan.parentNote,
+              ),
 
               // Tab content
               Expanded(
@@ -186,7 +254,89 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
       },
     );
   }
+}
 
+class _WeekNavigator extends StatelessWidget {
+  final String weekStart; // ISO date
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onPick;
+
+  const _WeekNavigator({
+    required this.weekStart,
+    required this.onPrev,
+    required this.onNext,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final monday = DateTime.parse(weekStart);
+    final sunday = monday.add(const Duration(days: 6));
+    final fmt = DateFormat('MMM d');
+    final label = '${fmt.format(monday)} - ${fmt.format(sunday)}, ${monday.year}';
+
+    // Indicate if current week / past / future
+    final today = DateTime.now();
+    final todayMonday =
+        today.subtract(Duration(days: today.weekday - 1));
+    final isCurrent = monday.year == todayMonday.year &&
+        monday.month == todayMonday.month &&
+        monday.day == todayMonday.day;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      color: AppColors.primary.withAlpha(15),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onPrev,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous week',
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: onPick,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.calendar_today,
+                            size: 16, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: AppTextStyles.bodyBold.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (isCurrent)
+                      Text('This week', style: AppTextStyles.caption)
+                    else if (monday.isAfter(todayMonday))
+                      Text('Upcoming week', style: AppTextStyles.caption)
+                    else
+                      Text('Past week', style: AppTextStyles.caption),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next week',
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StatusBanner extends StatelessWidget {
@@ -282,8 +432,9 @@ class _DayTaskList extends StatelessWidget {
       );
     }
 
-    // Sort tasks by hour
-    final sorted = List.of(tasks)..sort((a, b) => a.hour.compareTo(b.hour));
+    // Sort tasks by start time (hour + minute)
+    final sorted = List.of(tasks)
+      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 
     return Column(
       children: [
@@ -293,11 +444,14 @@ class _DayTaskList extends StatelessWidget {
             itemCount: sorted.length,
             itemBuilder: (context, index) {
               final task = sorted[index];
+              final startMins = task.hour * 60 + task.minute;
+              final endMins = startMins + task.duration;
+              final endHour = (endMins ~/ 60) % 24;
+              final endMin = endMins % 60;
               final timeStr =
-                  '${task.hour.toString().padLeft(2, '0')}:00';
-              final endHour = task.hour + (task.duration / 60).ceil();
+                  '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
               final endStr =
-                  '${endHour.toString().padLeft(2, '0')}:00';
+                  '${endHour.toString().padLeft(2, '0')}:${endMin.toString().padLeft(2, '0')}';
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
