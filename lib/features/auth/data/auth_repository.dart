@@ -59,4 +59,9 @@ class AuthRepository {
     if (!doc.exists || doc.data() == null) return null;
     return AppUser.fromMap(doc.data()!);
   }
+
+  /// Delete user profile from Firestore (when parent removes a kid).
+  Future<void> deleteUserProfile(String uid) async {
+    await _firestore.collection('userProfiles').doc(uid).delete();
+  }
 }

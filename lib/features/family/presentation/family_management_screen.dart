@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../providers/family_providers.dart';
 import '../domain/member_model.dart';
 
@@ -86,7 +87,14 @@ class FamilyManagementScreen extends ConsumerWidget {
                   loading: () => const LoadingWidget(),
                   error: (e, _) => Text('Error: $e'),
                   data: (members) => Column(
-                    children: members.map((m) => _MemberTile(member: m)).toList(),
+                    children: members
+                        .map((m) => _MemberTile(
+                              member: m,
+                              onDelete: m.role.name == 'child'
+                                  ? () => _deleteMember(context, ref, m)
+                                  : null,
+                            ))
+                        .toList(),
                   ),
                 ),
               ],
@@ -96,12 +104,75 @@ class FamilyManagementScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _deleteMember(
+    BuildContext context,
+    WidgetRef ref,
+    MemberModel member,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Member?'),
+        content: Text(
+          'Remove "${member.displayName}" from the family? '
+          'This will delete their avatar, coins, and all progress. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.accentRed),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final appUser = ref.read(appUserProvider).value;
+      if (appUser?.familyId == null) return;
+
+      await ref
+          .read(familyRepositoryProvider)
+          .deleteMember(appUser!.familyId!, member.id);
+
+      // Also delete their user profile if they have an authUid
+      if (member.authUid != null) {
+        await ref
+            .read(authRepositoryProvider)
+            .deleteUserProfile(member.authUid!);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${member.displayName} removed'),
+            backgroundColor: AppColors.accentRed,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
 }
 
 class _MemberTile extends StatelessWidget {
   final MemberModel member;
+  final VoidCallback? onDelete;
 
-  const _MemberTile({required this.member});
+  const _MemberTile({required this.member, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -119,14 +190,31 @@ class _MemberTile extends StatelessWidget {
         ),
         title: Text(member.displayName, style: AppTextStyles.bodyBold),
         subtitle: Text(
-          isParent ? 'Parent' : 'Level ${member.avatarState.level} ${member.avatarState.creatureType.displayName}',
+          isParent
+              ? 'Parent'
+              : 'Level ${member.avatarState.level} ${member.avatarState.creatureType.displayName}',
           style: AppTextStyles.caption,
         ),
         trailing: isParent
             ? null
-            : Text(
-                '${member.wallet.coins} coins',
-                style: AppTextStyles.label.copyWith(color: AppColors.accent),
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${member.wallet.coins} coins',
+                    style:
+                        AppTextStyles.label.copyWith(color: AppColors.accent),
+                  ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          color: AppColors.accentRed, size: 20),
+                      onPressed: onDelete,
+                      tooltip: 'Remove member',
+                    ),
+                  ],
+                ],
               ),
       ),
     );

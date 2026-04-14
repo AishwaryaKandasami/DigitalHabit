@@ -116,6 +116,14 @@ class FamilyRepository {
     return MemberModel.fromMap(doc.id, doc.data()!);
   }
 
+  /// Delete a member from a family.
+  Future<void> deleteMember(String familyId, String memberId) async {
+    await _firestore
+        .collection(FirestorePaths.members(familyId))
+        .doc(memberId)
+        .delete();
+  }
+
   /// Update member document (e.g., avatar state, wallet).
   Future<void> updateMember(
     String familyId,

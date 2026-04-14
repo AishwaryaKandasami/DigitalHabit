@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,6 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../domain/avatar_state.dart';
 import '../domain/creature_type.dart';
-import '../../auth/domain/app_user.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../family/providers/family_providers.dart';
 
@@ -39,17 +39,23 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // Try cached value first, then force a fresh read
-      AppUser? appUser = ref.read(appUserProvider).value;
-      if (appUser == null) {
-        // Force refresh and wait for it
-        ref.invalidate(appUserProvider);
-        appUser = await ref.read(appUserProvider.future);
+      // Read directly from Firebase Auth + Firestore to avoid provider timing issues
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Not signed in. Please go back and try again.')),
+          );
+        }
+        return;
       }
+
+      final authRepo = ref.read(authRepositoryProvider);
+      final appUser = await authRepo.getUserProfile(firebaseUser.uid);
       if (appUser == null || appUser.familyId == null || appUser.memberId == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('User session not ready. Please go back and try again.')),
+            const SnackBar(content: Text('Profile not ready. Please go back and try again.')),
           );
         }
         return;
