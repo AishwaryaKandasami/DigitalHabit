@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/game_constants.dart';
@@ -41,6 +42,22 @@ class AvatarScreen extends ConsumerWidget {
               style: AppTextStyles.caption,
             ),
             const SizedBox(height: 8),
+
+            // Egg-stage only: let kid change creature before it hatches
+            if (avatar.evolutionStage == 1) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/choose-avatar'),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Change my creature'),
+              ),
+              Text(
+                'You can change your creature until your egg hatches.',
+                style: AppTextStyles.caption,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // Streak and total XP
             Row(

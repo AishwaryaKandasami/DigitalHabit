@@ -22,11 +22,24 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
   CreatureType? _selected;
   final _nameController = TextEditingController();
   bool _isLoading = false;
+  bool _prefilled = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  /// Prefill the form from the current member (edit-mode), if available.
+  /// Runs on every build until it successfully hydrates once, because
+  /// `currentMemberProvider` may be null on first frame while Firestore loads.
+  void _maybePrefill() {
+    if (_prefilled) return;
+    final member = ref.read(currentMemberProvider);
+    if (member == null) return;
+    _selected = member.avatarState.creatureType;
+    _nameController.text = member.avatarState.creatureName;
+    _prefilled = true;
   }
 
   Future<void> _confirm() async {
@@ -62,14 +75,39 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
       }
 
       final familyRepo = ref.read(familyRepositoryProvider);
-      final avatar = AvatarState(
-        creatureName: _nameController.text.trim(),
-        creatureType: _selected!,
-        moodScore: 75,
-        health: 100,
-        evolutionStage: 1,
-        level: 1,
-      );
+
+      // Edit-mode safety: if the member already exists and has hatched past
+      // the egg, refuse to overwrite. (Shouldn't normally reach here because
+      // the entry button is hidden, but don't trust the client.)
+      final currentMember = ref.read(currentMemberProvider);
+      if (currentMember != null &&
+          currentMember.avatarState.evolutionStage > 1) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Your creature already hatched — it can\'t be changed now.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Preserve XP / mood / health / accessories when editing. Fall back to
+      // a fresh state when there's no existing member (first-login path).
+      final AvatarState avatar = currentMember != null
+          ? currentMember.avatarState.copyWith(
+              creatureName: _nameController.text.trim(),
+              creatureType: _selected!,
+            )
+          : AvatarState(
+              creatureName: _nameController.text.trim(),
+              creatureType: _selected!,
+              moodScore: 75,
+              health: 100,
+              evolutionStage: 1,
+              level: 1,
+            );
 
       await familyRepo.updateMember(
         appUser.familyId!,
@@ -92,27 +130,76 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the provider alive so changes during loading still hydrate the form.
+    ref.watch(familyMembersProvider);
+    _maybePrefill();
+
     if (_isLoading) {
       return const Scaffold(
         body: LoadingWidget(message: 'Hatching your creature...'),
       );
     }
 
+    // If the kid has already hatched, block the edit flow with a friendly
+    // message instead of allowing silent overwrite.
+    final member = ref.watch(currentMemberProvider);
+    final alreadyHatched =
+        member != null && member.avatarState.evolutionStage > 1;
+    if (alreadyHatched) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Choose Your Creature')),
+        body: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_outline,
+                  size: 64, color: AppColors.textSecondary),
+              const SizedBox(height: 16),
+              Text(
+                'Your creature already hatched!',
+                style: AppTextStyles.heading2,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You can\'t change ${member.avatarState.creatureName} anymore — keep going and watch it grow.',
+                style: AppTextStyles.body,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.go('/kid/avatar'),
+                child: const Text('Back to my avatar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final isEditMode =
+        member != null && member.avatarState.creatureName.isNotEmpty;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose Your Creature')),
+      appBar: AppBar(
+        title: Text(isEditMode ? 'Change Your Creature' : 'Choose Your Creature'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Pick your companion!',
+              isEditMode ? 'Pick a new look!' : 'Pick your companion!',
               style: AppTextStyles.heading2,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Your creature will grow as you build healthy habits.',
+              isEditMode
+                  ? 'You can change your creature until it hatches. Your XP, coins and items stay the same.'
+                  : 'Your creature will grow as you build healthy habits.',
               style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -148,8 +235,15 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _confirm,
-              child: const Text("Let's Go!"),
+              child: Text(isEditMode ? 'Save Changes' : "Let's Go!"),
             ),
+            if (isEditMode) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => context.go('/kid/avatar'),
+                child: const Text('Cancel'),
+              ),
+            ],
           ],
         ),
       ),

@@ -73,6 +73,9 @@ class PlanRepository {
   }
 
   /// Submit plan for parent approval.
+  ///
+  /// Also clears any previous `parentNote` so a re-submitted revision starts
+  /// from a clean slate on the parent's side.
   Future<void> submitPlan(String familyId, String planId) async {
     await _firestore
         .collection(FirestorePaths.plans(familyId))
@@ -80,6 +83,7 @@ class PlanRepository {
         .update({
       'status': PlanStatus.pendingApproval.name,
       'submittedAt': FieldValue.serverTimestamp(),
+      'parentNote': null,
     });
   }
 

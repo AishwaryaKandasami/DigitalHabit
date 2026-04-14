@@ -225,6 +225,15 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
               _StatusBanner(
                 status: bannerPlan.status,
                 parentNote: bannerPlan.parentNote,
+                onEdit: bannerPlan.status == PlanStatus.revisionRequested
+                    ? () {
+                        // Jump to today's tab, then open that day's editor.
+                        final todayIdx = _todayIndex();
+                        _tabController.animateTo(todayIdx);
+                        final dayName = PlanModel.dayNames[todayIdx];
+                        context.push('/kid/planner/day/$dayName');
+                      }
+                    : null,
               ),
 
               // Tab content
@@ -238,7 +247,8 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
                       dayName: dayName,
                       tasks: tasks,
                       isEditable: isEditable,
-                      onAddTask: () => context.push(
+                      status: plan.status,
+                      onOpenDay: () => context.push(
                         '/kid/planner/day/$dayName',
                       ),
                     );
@@ -342,8 +352,13 @@ class _WeekNavigator extends StatelessWidget {
 class _StatusBanner extends StatelessWidget {
   final PlanStatus status;
   final String? parentNote;
+  final VoidCallback? onEdit;
 
-  const _StatusBanner({required this.status, this.parentNote});
+  const _StatusBanner({
+    required this.status,
+    this.parentNote,
+    this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -368,6 +383,8 @@ class _StatusBanner extends StatelessWidget {
       _ => (AppColors.textSecondary, Icons.info, ''),
     };
 
+    final isRevision = status == PlanStatus.revisionRequested;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -379,7 +396,17 @@ class _StatusBanner extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(width: 8),
-              Text(label, style: AppTextStyles.bodyBold.copyWith(color: color)),
+              Expanded(
+                child: Text(label,
+                    style: AppTextStyles.bodyBold.copyWith(color: color)),
+              ),
+              if (isRevision && onEdit != null)
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit & resubmit'),
+                  style: TextButton.styleFrom(foregroundColor: color),
+                ),
             ],
           ),
           if (parentNote != null && parentNote!.isNotEmpty) ...[
@@ -387,6 +414,13 @@ class _StatusBanner extends StatelessWidget {
             Text(
               '"$parentNote"',
               style: AppTextStyles.caption.copyWith(fontStyle: FontStyle.italic),
+            ),
+          ],
+          if (isRevision) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Tap any day or task to change it, then tap Submit at the top.',
+              style: AppTextStyles.caption,
             ),
           ],
         ],
@@ -399,14 +433,26 @@ class _DayTaskList extends StatelessWidget {
   final String dayName;
   final List tasks;
   final bool isEditable;
-  final VoidCallback onAddTask;
+  final PlanStatus status;
+  final VoidCallback onOpenDay;
 
   const _DayTaskList({
     required this.dayName,
     required this.tasks,
     required this.isEditable,
-    required this.onAddTask,
+    required this.status,
+    required this.onOpenDay,
   });
+
+  bool get _isRevision => status == PlanStatus.revisionRequested;
+
+  String get _emptyCtaLabel =>
+      _isRevision ? 'Edit this day' : 'Add Tasks';
+
+  String get _bottomCtaLabel =>
+      _isRevision ? 'Edit this day' : 'Add More Tasks';
+
+  IconData get _ctaIcon => _isRevision ? Icons.edit : Icons.add;
 
   @override
   Widget build(BuildContext context) {
@@ -422,9 +468,9 @@ class _DayTaskList extends StatelessWidget {
             if (isEditable) ...[
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: onAddTask,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Tasks'),
+                onPressed: onOpenDay,
+                icon: Icon(_ctaIcon),
+                label: Text(_emptyCtaLabel),
               ),
             ],
           ],
@@ -456,6 +502,9 @@ class _DayTaskList extends StatelessWidget {
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
+                  // Tap the whole row to open the day editor (matches the
+                  // bottom CTA). Only tappable when editing is allowed.
+                  onTap: isEditable ? onOpenDay : null,
                   leading: Container(
                     width: 40,
                     height: 40,
@@ -471,11 +520,21 @@ class _DayTaskList extends StatelessWidget {
                     '$timeStr - $endStr  (${task.duration}min)',
                     style: AppTextStyles.caption,
                   ),
-                  trailing: task.isHealthy
-                      ? const Icon(Icons.eco,
-                          color: AppColors.accentGreen, size: 18)
-                      : const Icon(Icons.phone_android,
-                          color: AppColors.accentRed, size: 18),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      task.isHealthy
+                          ? const Icon(Icons.eco,
+                              color: AppColors.accentGreen, size: 18)
+                          : const Icon(Icons.phone_android,
+                              color: AppColors.accentRed, size: 18),
+                      if (isEditable) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right,
+                            size: 20, color: AppColors.textSecondary),
+                      ],
+                    ],
+                  ),
                 ),
               );
             },
@@ -487,9 +546,9 @@ class _DayTaskList extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: onAddTask,
-                icon: const Icon(Icons.add),
-                label: const Text('Add More Tasks'),
+                onPressed: onOpenDay,
+                icon: Icon(_ctaIcon),
+                label: Text(_bottomCtaLabel),
               ),
             ),
           ),
