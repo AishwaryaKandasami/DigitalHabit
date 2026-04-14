@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../../firebase_options.dart';
 import '../domain/app_user.dart';
 
 class AuthRepository {
@@ -35,9 +37,43 @@ class AuthRepository {
   }
 
   /// Sign in anonymously (for kids joining a family).
+  ///
+  /// Retained for backwards compatibility with existing anonymous kid accounts.
+  /// New kid accounts should use [createChildAccount] (email/password).
   Future<User> signInAnonymously() async {
     final credential = await _auth.signInAnonymously();
     return credential.user!;
+  }
+
+  /// Create a child email/password account using a secondary Firebase app so
+  /// the parent's session on this device is NOT replaced. The parent stays
+  /// signed in; the returned [User] represents the kid's account.
+  Future<User> createChildAccount(String email, String password) async {
+    final appName =
+        'kidCreator-${DateTime.now().microsecondsSinceEpoch}';
+    final secondaryApp = await Firebase.initializeApp(
+      name: appName,
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    try {
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      // Sign out the secondary auth so the kid isn't left signed in on the
+      // parent's device.
+      await secondaryAuth.signOut();
+      return cred.user!;
+    } finally {
+      await secondaryApp.delete();
+    }
+  }
+
+  /// Send a password reset email (used when a kid forgets their password;
+  /// the email lands in whatever inbox the parent registered for them).
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email);
   }
 
   /// Sign out.

@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -67,7 +68,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (appUser.isParent) {
         context.go('/parent');
       } else {
-        context.go('/kid');
+        // First-time kid (no creature name yet) → choose-avatar onboarding.
+        final familyId = appUser.familyId;
+        final memberId = appUser.memberId;
+        var goTo = '/kid';
+        if (familyId != null && memberId != null) {
+          final familyRepo = ref.read(familyRepositoryProvider);
+          final member = await familyRepo.getMember(familyId, memberId);
+          if (member != null && member.avatarState.creatureName.isEmpty) {
+            goTo = '/choose-avatar';
+          }
+        }
+        if (!mounted) return;
+        context.go(goTo);
       }
     } catch (e) {
       setState(() => _error = _friendlyError(e.toString()));

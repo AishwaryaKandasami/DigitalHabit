@@ -7,6 +7,7 @@ class MemberModel {
   final String displayName;
   final UserRole role;
   final String? authUid;
+  final String? email; // set for kid accounts created with email/password
   final AvatarState avatarState;
   final Wallet wallet;
   final InventoryModel inventory;
@@ -18,6 +19,7 @@ class MemberModel {
     required this.displayName,
     required this.role,
     this.authUid,
+    this.email,
     required this.avatarState,
     required this.wallet,
     this.inventory = const InventoryModel(),
@@ -29,6 +31,7 @@ class MemberModel {
         'displayName': displayName,
         'role': role.name,
         'authUid': authUid,
+        'email': email,
         'avatarState': avatarState.toMap(),
         'wallet': wallet.toMap(),
         'inventory': inventory.toList(),
@@ -42,6 +45,7 @@ class MemberModel {
         displayName: map['displayName'] as String,
         role: UserRole.values.byName(map['role'] as String),
         authUid: map['authUid'] as String?,
+        email: map['email'] as String?,
         avatarState: AvatarState.fromMap(
             map['avatarState'] as Map<String, dynamic>? ?? {}),
         wallet:
@@ -54,6 +58,7 @@ class MemberModel {
 
   MemberModel copyWith({
     String? displayName,
+    String? email,
     AvatarState? avatarState,
     Wallet? wallet,
     InventoryModel? inventory,
@@ -65,6 +70,7 @@ class MemberModel {
       displayName: displayName ?? this.displayName,
       role: role,
       authUid: authUid,
+      email: email ?? this.email,
       avatarState: avatarState ?? this.avatarState,
       wallet: wallet ?? this.wallet,
       inventory: inventory ?? this.inventory,

@@ -42,6 +42,12 @@ class WelcomeScreen extends ConsumerWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
+              const SizedBox(height: 16),
+              Text(
+                'Parents set up here. Kids log in with the email\ntheir parent made for them.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.caption,
+              ),
               const Spacer(flex: 2),
               SizedBox(
                 width: double.infinity,
@@ -54,18 +60,8 @@ class WelcomeScreen extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: () => context.push('/join-family'),
-                  child: const Text("I'm a Kid"),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => context.push('/login'),
-                child: Text(
-                  'Already have an account? Log in',
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.primary,
-                  ),
+                  onPressed: () => context.push('/login'),
+                  child: const Text('Log in'),
                 ),
               ),
               // Show sign out if user is stuck in a logged-in state

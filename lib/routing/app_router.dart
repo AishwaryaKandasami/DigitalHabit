@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/auth/presentation/parent_signup_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/join_family_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/avatar/presentation/choose_avatar_screen.dart';
 import '../features/avatar/presentation/avatar_screen.dart';
@@ -23,7 +22,7 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Paths that a signed-in user should be redirected away from (they'd bounce
 /// them straight to dashboard).
-const _publicOnlyPaths = {'/', '/signup', '/login', '/join-family'};
+const _publicOnlyPaths = {'/', '/signup', '/login'};
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -69,9 +68,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, _) => const WelcomeScreen()),
       GoRoute(path: '/signup', builder: (_, _) => const ParentSignupScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(
-          path: '/join-family',
-          builder: (_, _) => const JoinFamilyScreen()),
       GoRoute(
           path: '/choose-avatar',
           builder: (_, _) => const ChooseAvatarScreen()),

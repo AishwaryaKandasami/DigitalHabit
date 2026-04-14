@@ -71,6 +71,8 @@ class FamilyRepository {
     required String displayName,
     required UserRole role,
     String? authUid,
+    String? email,
+    AvatarState? avatarState,
   }) async {
     final docRef = _firestore
         .collection(FirestorePaths.members(familyId))
@@ -80,7 +82,8 @@ class FamilyRepository {
       displayName: displayName,
       role: role,
       authUid: authUid,
-      avatarState: const AvatarState(),
+      email: email,
+      avatarState: avatarState ?? const AvatarState(),
       wallet: const Wallet(),
     );
     await docRef.set(member.toMap());
