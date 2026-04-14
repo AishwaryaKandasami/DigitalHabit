@@ -6,6 +6,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../domain/avatar_state.dart';
 import '../domain/creature_type.dart';
+import '../../auth/domain/app_user.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../family/providers/family_providers.dart';
 
@@ -38,8 +39,21 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final appUser = ref.read(appUserProvider).value;
-      if (appUser == null) return;
+      // Try cached value first, then force a fresh read
+      AppUser? appUser = ref.read(appUserProvider).value;
+      if (appUser == null) {
+        // Force refresh and wait for it
+        ref.invalidate(appUserProvider);
+        appUser = await ref.read(appUserProvider.future);
+      }
+      if (appUser == null || appUser.familyId == null || appUser.memberId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User session not ready. Please go back and try again.')),
+          );
+        }
+        return;
+      }
 
       final familyRepo = ref.read(familyRepositoryProvider);
       final avatar = AvatarState(

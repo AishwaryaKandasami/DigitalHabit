@@ -69,6 +69,8 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
       ));
 
       ref.invalidate(appUserProvider);
+      // Wait for provider to resolve before navigating
+      await ref.read(appUserProvider.future);
 
       if (mounted) context.go('/choose-avatar');
     } catch (e) {

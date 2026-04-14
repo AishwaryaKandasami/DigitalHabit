@@ -75,8 +75,9 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
         role: UserRole.parent,
       ));
 
-      // 6. Invalidate providers so they refetch
+      // 6. Invalidate providers and wait for refetch
       ref.invalidate(appUserProvider);
+      await ref.read(appUserProvider.future);
 
       if (mounted) context.go('/parent');
     } catch (e) {
