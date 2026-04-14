@@ -69,7 +69,16 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
               if (mounted) context.go('/parent');
               return;
             }
-            // Profile missing — continue to create family below
+            // Profile doc missing — try to recover from existing family data
+            // before creating a duplicate family.
+            final recovered = await authRepo.recoverUserProfile(user);
+            if (recovered != null && recovered.familyId != null) {
+              ref.invalidate(appUserProvider);
+              await ref.read(appUserProvider.future);
+              if (mounted) context.go('/parent');
+              return;
+            }
+            // Nothing to recover — continue to create family below
           } catch (_) {
             setState(() => _error =
                 'This email is already registered. Try logging in with the correct password.');

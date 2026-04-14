@@ -64,4 +64,93 @@ class AuthRepository {
   Future<void> deleteUserProfile(String uid) async {
     await _firestore.collection('userProfiles').doc(uid).delete();
   }
+
+  /// Attempt to recover the userProfile for a signed-in user whose mapping
+  /// doc is missing (e.g. an earlier aborted signup). Searches for a family
+  /// they own (parent) or a member doc with a matching authUid (any role).
+  /// Writes the rebuilt profile and returns it, or null if nothing found.
+  Future<AppUser?> recoverUserProfile(User user) async {
+    // Case 1: user is the parent (owner) of some family.
+    final ownedFamilies = await _firestore
+        .collection('families')
+        .where('parentUid', isEqualTo: user.uid)
+        .limit(1)
+        .get();
+    if (ownedFamilies.docs.isNotEmpty) {
+      final familyId = ownedFamilies.docs.first.id;
+      // Find the parent's member doc in that family.
+      final memberQuery = await _firestore
+          .collection('families')
+          .doc(familyId)
+          .collection('members')
+          .where('authUid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      String memberId;
+      String roleName;
+      if (memberQuery.docs.isNotEmpty) {
+        final memberDoc = memberQuery.docs.first;
+        memberId = memberDoc.id;
+        roleName = memberDoc.data()['role'] as String? ?? 'parent';
+      } else {
+        // Family exists but parent has no member doc yet — create one.
+        final newMember = _firestore
+            .collection('families')
+            .doc(familyId)
+            .collection('members')
+            .doc();
+        await newMember.set({
+          'displayName': 'Parent',
+          'role': 'parent',
+          'authUid': user.uid,
+          'avatarState': {},
+          'wallet': {'coins': 0, 'totalEarned': 0},
+          'inventory': <dynamic>[],
+          'streakDays': 0,
+          'lastActiveDate': null,
+        });
+        memberId = newMember.id;
+        roleName = 'parent';
+      }
+      final rebuilt = AppUser(
+        uid: user.uid,
+        email: user.email,
+        familyId: familyId,
+        memberId: memberId,
+        role: UserRole.values.byName(roleName),
+      );
+      await saveUserProfile(rebuilt);
+      return rebuilt;
+    }
+
+    // Case 2: user is a member (kid) somewhere — try collectionGroup.
+    try {
+      final memberQuery = await _firestore
+          .collectionGroup('members')
+          .where('authUid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      if (memberQuery.docs.isNotEmpty) {
+        final memberDoc = memberQuery.docs.first;
+        // memberDoc.reference.path looks like
+        // "families/{familyId}/members/{memberId}"
+        final segments = memberDoc.reference.path.split('/');
+        final familyId = segments[1];
+        final roleName = memberDoc.data()['role'] as String? ?? 'child';
+        final rebuilt = AppUser(
+          uid: user.uid,
+          email: user.email,
+          familyId: familyId,
+          memberId: memberDoc.id,
+          role: UserRole.values.byName(roleName),
+        );
+        await saveUserProfile(rebuilt);
+        return rebuilt;
+      }
+    } catch (_) {
+      // collectionGroup may require an index; swallow and return null.
+    }
+
+    return null;
+  }
 }

@@ -36,20 +36,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      await authRepo.signIn(
+      final user = await authRepo.signIn(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
       // Wait for profile to load
       ref.invalidate(appUserProvider);
-      final appUser = await ref.read(appUserProvider.future);
+      var appUser = await ref.read(appUserProvider.future);
+
+      // Recovery path: auth succeeded but no userProfile mapping doc exists.
+      // This typically means an earlier signup was interrupted after the
+      // family/member were created. Rebuild the profile from Firestore data.
+      if (appUser == null) {
+        appUser = await authRepo.recoverUserProfile(user);
+        if (appUser != null) {
+          ref.invalidate(appUserProvider);
+          await ref.read(appUserProvider.future);
+        }
+      }
 
       if (!mounted) return;
       if (appUser == null) {
-        // Profile missing but auth succeeded — send to signup to complete setup
+        // No family found anywhere — genuinely needs to sign up.
         setState(() => _error =
-            'Account exists but family not set up yet. Please sign up to complete setup.');
+            'Account exists but we could not find your family. Please sign up to complete setup.');
         return;
       }
 
