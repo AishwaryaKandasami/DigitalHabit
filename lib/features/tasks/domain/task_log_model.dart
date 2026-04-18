@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../planner/domain/task_category.dart';
 
+/// Parent's qualitative feedback on a verified task.
+enum ParentFeedback { positive, negative }
+
 class TaskLogModel {
   final String id;
   final String planId;
@@ -15,6 +18,8 @@ class TaskLogModel {
   final bool? verifiedByParent; // null = not yet reviewed
   final int coinsEarned;
   final int xpEarned;
+  final ParentFeedback? parentFeedback;
+  final String? parentComment;
 
   const TaskLogModel({
     required this.id,
@@ -30,6 +35,8 @@ class TaskLogModel {
     this.verifiedByParent,
     required this.coinsEarned,
     required this.xpEarned,
+    this.parentFeedback,
+    this.parentComment,
   });
 
   bool get isPendingVerification => verifiedByParent == null;
@@ -48,6 +55,8 @@ class TaskLogModel {
         'verifiedByParent': verifiedByParent,
         'coinsEarned': coinsEarned,
         'xpEarned': xpEarned,
+        'parentFeedback': parentFeedback?.name,
+        'parentComment': parentComment,
       };
 
   factory TaskLogModel.fromMap(String id, Map<String, dynamic> map) =>
@@ -65,5 +74,9 @@ class TaskLogModel {
         verifiedByParent: map['verifiedByParent'] as bool?,
         coinsEarned: map['coinsEarned'] as int? ?? 0,
         xpEarned: map['xpEarned'] as int? ?? 0,
+        parentFeedback: map['parentFeedback'] != null
+            ? ParentFeedback.values.byName(map['parentFeedback'] as String)
+            : null,
+        parentComment: map['parentComment'] as String?,
       );
 }

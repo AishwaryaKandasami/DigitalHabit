@@ -33,6 +33,12 @@ class GameConstants {
   static const int moodSkippedTask = -8;
   static const int moodDailyDecay = -5;
   static const int moodFoodItem = 15;
+  static const int moodParentPraise = 10;
+  static const int moodParentCritique = -15;
+
+  // --- Parent feedback on verified tasks ---
+  /// Coins deducted when a verified task is marked "needs improvement".
+  static const int coinsParentCritiquePenalty = 5;
 
   // Mood thresholds
   static const int moodHappyThreshold = 80;

@@ -83,10 +83,8 @@ class TaskVerificationScreen extends ConsumerWidget {
                   ),
                   ...entry.value.map((log) => _VerificationCard(
                         log: log,
-                        onVerify: () =>
-                            _verify(context, ref, log, true),
-                        onReject: () =>
-                            _verify(context, ref, log, false),
+                        onReview: () => _openReviewDialog(context, ref, log),
+                        onReject: () => _reject(context, ref, log),
                       )),
                   const SizedBox(height: 8),
                 ],
@@ -98,12 +96,17 @@ class TaskVerificationScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _verify(
+  Future<void> _openReviewDialog(
     BuildContext context,
     WidgetRef ref,
     TaskLogModel log,
-    bool approved,
   ) async {
+    final result = await showDialog<_ReviewResult>(
+      context: context,
+      builder: (_) => _ReviewDialog(log: log),
+    );
+    if (result == null) return; // Cancelled
+
     try {
       final appUser = ref.read(appUserProvider).value;
       if (appUser == null) return;
@@ -112,17 +115,77 @@ class TaskVerificationScreen extends ConsumerWidget {
             familyId: appUser.familyId!,
             memberId: log.memberId,
             log: log,
-            approved: approved,
+            approved: true,
+            feedback: result.feedback,
+            comment: result.comment,
+          );
+
+      if (context.mounted) {
+        final isNegative = result.feedback == ParentFeedback.negative;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isNegative
+                ? '${log.title}: feedback sent. Coins reduced.'
+                : '${log.title} verified! Bonus awarded.'),
+            backgroundColor: isNegative
+                ? AppColors.accentRed
+                : AppColors.accentGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _reject(
+    BuildContext context,
+    WidgetRef ref,
+    TaskLogModel log,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject this task?'),
+        content: Text(
+          'Mark "${log.title}" as not completed. No coins or XP will be '
+          'awarded. Use this when the task wasn\'t actually done.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.accentRed),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final appUser = ref.read(appUserProvider).value;
+      if (appUser == null) return;
+
+      await ref.read(taskLogRepositoryProvider).verifyTask(
+            familyId: appUser.familyId!,
+            memberId: log.memberId,
+            log: log,
+            approved: false,
           );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approved
-                ? '${log.title} verified! Bonus awarded.'
-                : '${log.title} rejected.'),
-            backgroundColor:
-                approved ? AppColors.accentGreen : AppColors.textSecondary,
+            content: Text('${log.title} rejected.'),
+            backgroundColor: AppColors.textSecondary,
           ),
         );
       }
@@ -136,14 +199,130 @@ class TaskVerificationScreen extends ConsumerWidget {
   }
 }
 
+class _ReviewResult {
+  final ParentFeedback? feedback;
+  final String? comment;
+  const _ReviewResult({this.feedback, this.comment});
+}
+
+class _ReviewDialog extends StatefulWidget {
+  final TaskLogModel log;
+  const _ReviewDialog({required this.log});
+
+  @override
+  State<_ReviewDialog> createState() => _ReviewDialogState();
+}
+
+class _ReviewDialogState extends State<_ReviewDialog> {
+  ParentFeedback _feedback = ParentFeedback.positive;
+  final _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNegative = _feedback == ParentFeedback.negative;
+    return AlertDialog(
+      title: const Text('Review task'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.log.title, style: AppTextStyles.bodyBold),
+              const SizedBox(height: 4),
+              Text(widget.log.category.displayName,
+                  style: AppTextStyles.caption),
+              const SizedBox(height: 20),
+              Text('How did they do?', style: AppTextStyles.label),
+              const SizedBox(height: 8),
+              SegmentedButton<ParentFeedback>(
+                segments: const [
+                  ButtonSegment(
+                    value: ParentFeedback.positive,
+                    icon: Icon(Icons.thumb_up),
+                    label: Text('Good'),
+                  ),
+                  ButtonSegment(
+                    value: ParentFeedback.negative,
+                    icon: Icon(Icons.thumb_down),
+                    label: Text('Needs work'),
+                  ),
+                ],
+                selected: {_feedback},
+                onSelectionChanged: (s) =>
+                    setState(() => _feedback = s.first),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: (isNegative
+                          ? AppColors.accentRed
+                          : AppColors.accentGreen)
+                      .withAlpha(25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isNegative
+                      ? 'Your kid will lose some coins and their avatar will be a bit sad.'
+                      : 'Your kid gets a coin + XP bonus and their avatar will cheer up.',
+                  style: AppTextStyles.caption,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _commentController,
+                decoration: const InputDecoration(
+                  labelText: 'Comment (optional)',
+                  hintText: 'e.g. "Great job finishing on time!"',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+                maxLength: 140,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _ReviewResult(
+              feedback: _feedback,
+              comment: _commentController.text,
+            ),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor:
+                isNegative ? AppColors.accentRed : AppColors.accentGreen,
+          ),
+          child: Text(isNegative ? 'Send feedback' : 'Approve'),
+        ),
+      ],
+    );
+  }
+}
+
 class _VerificationCard extends StatelessWidget {
   final TaskLogModel log;
-  final VoidCallback onVerify;
+  final VoidCallback onReview;
   final VoidCallback onReject;
 
   const _VerificationCard({
     required this.log,
-    required this.onVerify,
+    required this.onReview,
     required this.onReject,
   });
 
@@ -204,16 +383,16 @@ class _VerificationCard extends StatelessWidget {
             Column(
               children: [
                 IconButton(
-                  onPressed: onVerify,
-                  icon: const Icon(Icons.check_circle),
+                  onPressed: onReview,
+                  icon: const Icon(Icons.rate_review),
                   color: AppColors.accentGreen,
-                  tooltip: 'Verify',
+                  tooltip: 'Review & approve',
                 ),
                 IconButton(
                   onPressed: onReject,
                   icon: const Icon(Icons.cancel),
                   color: AppColors.accentRed,
-                  tooltip: 'Reject',
+                  tooltip: 'Reject (not done)',
                 ),
               ],
             ),

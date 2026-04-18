@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/constants/game_constants.dart';
 import '../../domain/avatar_state.dart';
 
@@ -8,10 +9,15 @@ class AvatarDisplay extends StatelessWidget {
   final AvatarState avatarState;
   final double size;
 
+  /// Whether to show a mood-based chat-bubble above the avatar. Auto-hides
+  /// for small (<120) renderings to keep badges on nav / header clean.
+  final bool showMoodNote;
+
   const AvatarDisplay({
     super.key,
     required this.avatarState,
     this.size = 200,
+    this.showMoodNote = true,
   });
 
   String get _stageEmoji {
@@ -59,6 +65,25 @@ class AvatarDisplay extends StatelessWidget {
       return AppColors.moodSad;
     }
     return AppColors.moodSick;
+  }
+
+  /// Friendly one-liner the avatar "says", driven by mood (and egg stage).
+  String get _moodNote {
+    // Before the egg hatches, the creature can't "talk" much.
+    if (avatarState.evolutionStage == 1) {
+      return 'Keep me warm! 🥚';
+    }
+    final mood = avatarState.moodScore;
+    if (mood >= GameConstants.moodHappyThreshold) {
+      return "WOW! I'm happy today!";
+    }
+    if (mood >= GameConstants.moodNeutralThreshold) {
+      return 'Feeling good.';
+    }
+    if (mood >= GameConstants.moodSadThreshold) {
+      return 'I feel a bit sad…';
+    }
+    return "I'm tired today…";
   }
 
   @override
@@ -113,6 +138,101 @@ class AvatarDisplay extends StatelessWidget {
           .moveY(begin: 0, end: 3, duration: 2000.ms);
     }
 
-    return avatar;
+    // Skip the chat bubble on small instances (used in nav/headers).
+    if (!showMoodNote || size < 120) {
+      return avatar;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MoodChatBubble(text: _moodNote, mood: avatarState.moodScore),
+        const SizedBox(height: 8),
+        avatar,
+      ],
+    );
   }
+}
+
+class _MoodChatBubble extends StatelessWidget {
+  final String text;
+  final int mood;
+
+  const _MoodChatBubble({required this.text, required this.mood});
+
+  Color get _bg {
+    if (mood >= GameConstants.moodHappyThreshold) {
+      return AppColors.moodHappy.withAlpha(40);
+    }
+    if (mood >= GameConstants.moodNeutralThreshold) {
+      return AppColors.moodNeutral.withAlpha(40);
+    }
+    if (mood >= GameConstants.moodSadThreshold) {
+      return AppColors.moodSad.withAlpha(40);
+    }
+    return AppColors.moodSick.withAlpha(40);
+  }
+
+  Color get _border {
+    if (mood >= GameConstants.moodHappyThreshold) return AppColors.moodHappy;
+    if (mood >= GameConstants.moodNeutralThreshold) {
+      return AppColors.moodNeutral;
+    }
+    if (mood >= GameConstants.moodSadThreshold) return AppColors.moodSad;
+    return AppColors.moodSick;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _border.withAlpha(120)),
+          ),
+          child: Text(
+            text,
+            style: AppTextStyles.bodyBold.copyWith(color: _border),
+          ),
+        ),
+        // Tiny tail triangle pointing down to the avatar.
+        CustomPaint(
+          size: const Size(14, 8),
+          painter: _BubbleTailPainter(color: _bg, border: _border),
+        ),
+      ],
+    );
+  }
+}
+
+class _BubbleTailPainter extends CustomPainter {
+  final Color color;
+  final Color border;
+  _BubbleTailPainter({required this.color, required this.border});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = border.withAlpha(120)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BubbleTailPainter old) =>
+      old.color != color || old.border != border;
 }
