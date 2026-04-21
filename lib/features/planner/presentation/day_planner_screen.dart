@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/id_generator.dart';
 import '../domain/plan_model.dart';
 import '../domain/task_model.dart';
 import '../providers/planner_providers.dart';
@@ -41,11 +42,18 @@ class DayPlannerScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(_dayLabel),
         actions: [
-          if (isEditable)
+          if (isEditable) ...[
+            IconButton(
+              icon: const Icon(Icons.content_copy),
+              tooltip: 'Copy tasks from another day',
+              onPressed: () => _copyFromAnotherDay(context, ref),
+            ),
             IconButton(
               icon: const Icon(Icons.add),
+              tooltip: 'Add task',
               onPressed: () => _addTask(context, ref),
             ),
+          ],
         ],
       ),
       body: tasks.isEmpty
@@ -123,6 +131,247 @@ class DayPlannerScreen extends ConsumerWidget {
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = dayTasks;
     ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+  }
+
+  Future<void> _copyFromAnotherDay(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final draft = ref.read(draftPlanProvider);
+    if (draft == null) return;
+
+    // Build the picker entries: every day except the current one,
+    // with its task count.
+    final entries = <_CopySource>[];
+    for (int i = 0; i < PlanModel.dayNames.length; i++) {
+      final src = PlanModel.dayNames[i];
+      if (src == dayName) continue;
+      final tasks = draft.tasksForDay(src);
+      entries.add(_CopySource(
+        dayName: src,
+        label: [
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+          'Sunday',
+        ][i],
+        taskCount: tasks.length,
+      ));
+    }
+
+    final hasAny = entries.any((e) => e.taskCount > 0);
+    if (!hasAny) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No other day has tasks to copy yet. Plan another day first!',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final picked = await showDialog<_CopyPickResult>(
+      context: context,
+      builder: (_) => _CopyFromDayDialog(
+        sources: entries,
+        targetLabel: _dayLabel,
+        hasExistingTasks: draft.tasksForDay(dayName).isNotEmpty,
+      ),
+    );
+    if (picked == null) return;
+
+    final sourceTasks = draft.tasksForDay(picked.sourceDay);
+    if (sourceTasks.isEmpty) return;
+
+    // Fresh IDs so each copy is an independent task (delete / edit doesn't
+    // touch the source day).
+    final copies = sourceTasks
+        .map((t) => TaskModel(
+              taskId: IdGenerator.uuid(),
+              hour: t.hour,
+              minute: t.minute,
+              duration: t.duration,
+              title: t.title,
+              category: t.category,
+              customCategoryName: t.customCategoryName,
+              isDigitalActivity: t.isDigitalActivity,
+              isHealthy: t.isHealthy,
+            ))
+        .toList();
+
+    final existing = List<TaskModel>.from(draft.tasksForDay(dayName));
+    final merged = picked.replace ? copies : [...existing, ...copies];
+
+    final newDays = Map<String, List<TaskModel>>.from(draft.days);
+    newDays[dayName] = merged;
+    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(picked.replace
+              ? 'Replaced $_dayLabel with ${copies.length} tasks from ${picked.sourceLabel}.'
+              : 'Added ${copies.length} tasks from ${picked.sourceLabel}.'),
+        ),
+      );
+    }
+  }
+}
+
+class _CopySource {
+  final String dayName;
+  final String label;
+  final int taskCount;
+  const _CopySource({
+    required this.dayName,
+    required this.label,
+    required this.taskCount,
+  });
+}
+
+class _CopyPickResult {
+  final String sourceDay;
+  final String sourceLabel;
+  final bool replace;
+  const _CopyPickResult({
+    required this.sourceDay,
+    required this.sourceLabel,
+    required this.replace,
+  });
+}
+
+class _CopyFromDayDialog extends StatefulWidget {
+  final List<_CopySource> sources;
+  final String targetLabel;
+  final bool hasExistingTasks;
+
+  const _CopyFromDayDialog({
+    required this.sources,
+    required this.targetLabel,
+    required this.hasExistingTasks,
+  });
+
+  @override
+  State<_CopyFromDayDialog> createState() => _CopyFromDayDialogState();
+}
+
+class _CopyFromDayDialogState extends State<_CopyFromDayDialog> {
+  String? _selectedDay;
+  // Default to append (safer): existing tasks aren't wiped out.
+  bool _replace = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Copy to ${widget.targetLabel}'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Pick a day to copy tasks from:',
+                style: AppTextStyles.caption,
+              ),
+              const SizedBox(height: 8),
+              ...widget.sources.map((s) {
+                final enabled = s.taskCount > 0;
+                final selected = _selectedDay == s.dayName;
+                return ListTile(
+                  dense: true,
+                  enabled: enabled,
+                  onTap: enabled
+                      ? () => setState(() => _selectedDay = s.dayName)
+                      : null,
+                  leading: Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: selected
+                        ? AppColors.primary
+                        : (enabled
+                            ? AppColors.textSecondary
+                            : AppColors.textSecondary.withAlpha(80)),
+                  ),
+                  title: Text(
+                    s.label,
+                    style: TextStyle(
+                      color: enabled
+                          ? (selected
+                              ? AppColors.primary
+                              : AppColors.textPrimary)
+                          : AppColors.textSecondary,
+                      fontWeight:
+                          selected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: Text(
+                    s.taskCount == 0
+                        ? 'No tasks'
+                        : '${s.taskCount} task${s.taskCount == 1 ? '' : 's'}',
+                    style: AppTextStyles.caption,
+                  ),
+                );
+              }),
+              if (widget.hasExistingTasks) ...[
+                const Divider(height: 24),
+                Text(
+                  '${widget.targetLabel} already has tasks. What should we do?',
+                  style: AppTextStyles.label,
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.add),
+                      label: Text('Add'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.swap_horiz),
+                      label: Text('Replace'),
+                    ),
+                  ],
+                  selected: {_replace},
+                  onSelectionChanged: (s) =>
+                      setState(() => _replace = s.first),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selectedDay == null
+              ? null
+              : () {
+                  final src = widget.sources
+                      .firstWhere((s) => s.dayName == _selectedDay);
+                  Navigator.pop(
+                    context,
+                    _CopyPickResult(
+                      sourceDay: src.dayName,
+                      sourceLabel: src.label,
+                      replace: _replace,
+                    ),
+                  );
+                },
+          child: const Text('Copy'),
+        ),
+      ],
+    );
   }
 }
 
