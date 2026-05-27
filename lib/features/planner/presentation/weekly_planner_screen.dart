@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/id_generator.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../domain/plan_model.dart';
+import '../domain/task_model.dart';
 import '../providers/planner_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 
@@ -98,6 +100,123 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     }
   }
 
+  String _isoDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Copy the previous week's plan into the currently selected week.
+  Future<void> _copyLastWeek() async {
+    final appUser = ref.read(appUserProvider).value;
+    final draft = ref.read(draftPlanProvider);
+    if (appUser?.familyId == null ||
+        appUser?.memberId == null ||
+        draft == null) {
+      return;
+    }
+
+    final currentMonday = DateTime.parse(ref.read(selectedWeekStartProvider));
+    final prevMonday = currentMonday.subtract(const Duration(days: 7));
+    final prevIso = _isoDate(prevMonday);
+
+    final repo = ref.read(planRepositoryProvider);
+    PlanModel? prevPlan;
+    try {
+      prevPlan = await repo.getPlanForWeek(
+        appUser!.familyId!,
+        appUser.memberId!,
+        prevIso,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+      return;
+    }
+
+    if (prevPlan == null || prevPlan.totalTasks == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No plan with tasks found for the previous week '
+              '(${DateFormat('MMM d').format(prevMonday)}).',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final hasExisting = draft.totalTasks > 0;
+    final replace = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Copy last week's plan?"),
+        content: Text(
+          hasExisting
+              ? 'Last week has ${prevPlan!.totalTasks} tasks. This week already '
+                  'has ${draft.totalTasks}. Replace this week with last week\'s '
+                  'plan, or add them on top?'
+              : 'Copy all ${prevPlan!.totalTasks} tasks from last week into this '
+                  'week?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          if (hasExisting)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Add on top'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(hasExisting ? 'Replace' : 'Copy'),
+          ),
+        ],
+      ),
+    );
+    if (replace == null) return; // cancelled
+
+    // Fresh task IDs so the copies are independent of last week's plan.
+    final newDays = <String, List<TaskModel>>{};
+    for (final day in PlanModel.dayNames) {
+      final copies = prevPlan.tasksForDay(day).map((t) => TaskModel(
+            taskId: IdGenerator.uuid(),
+            hour: t.hour,
+            minute: t.minute,
+            duration: t.duration,
+            title: t.title,
+            category: t.category,
+            customCategoryName: t.customCategoryName,
+            isDigitalActivity: t.isDigitalActivity,
+            isHealthy: t.isHealthy,
+          ));
+      if (replace) {
+        newDays[day] = copies.toList();
+      } else {
+        newDays[day] = [...draft.tasksForDay(day), ...copies];
+      }
+    }
+
+    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Copied ${prevPlan.totalTasks} tasks from last week. '
+            'Review and tap Submit.',
+          ),
+          backgroundColor: AppColors.accentGreen,
+        ),
+      );
+    }
+  }
+
   void _changeWeek(int deltaDays) {
     final current = ref.read(selectedWeekStartProvider);
     final parsed = DateTime.parse(current);
@@ -181,6 +300,12 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
           appBar: AppBar(
             title: const Text('Weekly Plan'),
             actions: [
+              if (isEditable)
+                IconButton(
+                  onPressed: _copyLastWeek,
+                  icon: const Icon(Icons.copy_all, color: Colors.white),
+                  tooltip: "Copy last week's plan",
+                ),
               if (plan.isSubmittable)
                 TextButton.icon(
                   onPressed: _submitPlan,
