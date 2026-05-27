@@ -1,0 +1,39 @@
+name: Deploy Firestore Rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firestore.indexes.json"
+      - "firebase.json"
+      - ".github/workflows/deploy-rules.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Skip gracefully (no red build) until the service-account secret is added.
+      - name: Check for service account secret
+        id: check
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$SA" ]; then
+            echo "has_secret=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_secret=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret not set — skipping Firestore rules deploy. See README/comments for setup."
+          fi
+
+      - name: Deploy Firestore rules
+        if: steps.check.outputs.has_secret == 'true'
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:rules
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: habitquest-2b29f
