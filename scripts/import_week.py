@@ -23,6 +23,7 @@ If HQ_EMAIL / HQ_PASSWORD are not set, the script prompts for them.
 """
 
 import os
+import re
 import sys
 import json
 import getpass
@@ -31,8 +32,42 @@ from datetime import datetime, date, timedelta, timezone
 import requests
 import openpyxl
 
-API_KEY = "AIzaSyC5Q0gKbe1utp43qRcTpkwikh5NiZBOIJ4"
-PROJECT_ID = "habitquest-2b29f"
+
+def _config_from_options():
+    """Pull the Firebase web apiKey/projectId from lib/firebase_options.dart.
+
+    This is a public Firebase *client* config (safe to live in the app source),
+    so we read it from there instead of duplicating the key inside this script.
+    """
+    path = os.path.join(os.path.dirname(__file__), "..", "lib",
+                        "firebase_options.dart")
+    api_key = project_id = None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        m = re.search(r"apiKey:\s*'([^']+)'", text)
+        if m:
+            api_key = m.group(1)
+        m = re.search(r"projectId:\s*'([^']+)'", text)
+        if m:
+            project_id = m.group(1)
+    except OSError:
+        pass
+    return api_key, project_id
+
+
+_OPT_KEY, _OPT_PID = _config_from_options()
+
+# Prefer env vars, fall back to the app's firebase_options.dart.
+API_KEY = os.environ.get("HQ_API_KEY") or _OPT_KEY
+PROJECT_ID = os.environ.get("HQ_PROJECT_ID") or _OPT_PID
+
+if not API_KEY or not PROJECT_ID:
+    sys.exit(
+        "Could not determine the Firebase web API key / project id.\n"
+        "Set HQ_API_KEY and HQ_PROJECT_ID, or run from the repo root so "
+        "lib/firebase_options.dart can be read."
+    )
 
 AUTH_BASE = "https://identitytoolkit.googleapis.com/v1"
 FS_BASE = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
