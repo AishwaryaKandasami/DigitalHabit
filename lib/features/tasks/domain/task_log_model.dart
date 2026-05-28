@@ -20,6 +20,9 @@ class TaskLogModel {
   final int xpEarned;
   final ParentFeedback? parentFeedback;
   final String? parentComment;
+  /// True once the kid has seen the parent's review on this log.
+  /// Used to drive the "new feedback" badge on the dashboard.
+  final bool seenByChild;
 
   const TaskLogModel({
     required this.id,
@@ -37,10 +40,14 @@ class TaskLogModel {
     required this.xpEarned,
     this.parentFeedback,
     this.parentComment,
+    this.seenByChild = false,
   });
 
   bool get isPendingVerification => verifiedByParent == null;
   bool get isVerified => verifiedByParent == true;
+
+  /// Has the parent reviewed it and the kid hasn't acknowledged yet?
+  bool get hasUnreadFeedback => verifiedByParent != null && !seenByChild;
 
   Map<String, dynamic> toMap() => {
         'planId': planId,
@@ -57,6 +64,7 @@ class TaskLogModel {
         'xpEarned': xpEarned,
         'parentFeedback': parentFeedback?.name,
         'parentComment': parentComment,
+        'seenByChild': seenByChild,
       };
 
   factory TaskLogModel.fromMap(String id, Map<String, dynamic> map) =>
@@ -78,5 +86,6 @@ class TaskLogModel {
             ? ParentFeedback.values.byName(map['parentFeedback'] as String)
             : null,
         parentComment: map['parentComment'] as String?,
+        seenByChild: map['seenByChild'] as bool? ?? false,
       );
 }

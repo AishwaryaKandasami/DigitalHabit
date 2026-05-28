@@ -55,6 +55,9 @@ class KidDashboardScreen extends ConsumerWidget {
       for (final l in (logsAsync.value ?? const <TaskLogModel>[]))
         l.taskId: l,
     };
+    final unreadLogs = (logsAsync.value ?? const <TaskLogModel>[])
+        .where((l) => l.hasUnreadFeedback)
+        .toList();
     final doneCount =
         todayTasks.where((t) => completedTaskIds.contains(t.taskId)).length;
     final totalCount = todayTasks.length;
@@ -109,6 +112,16 @@ class KidDashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // New feedback banner (only when there's unread parent feedback)
+              if (unreadLogs.isNotEmpty) ...[
+                _FeedbackBanner(
+                  count: unreadLogs.length,
+                  onTap: () =>
+                      _openFeedback(context, ref, unreadLogs),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // XP bar
               XpBar(
@@ -295,6 +308,27 @@ class KidDashboardScreen extends ConsumerWidget {
     );
   }
 
+  /// Mark all currently-unread feedback logs as seen and jump to the
+  /// Today's Tasks screen so the kid actually sees the comments.
+  Future<void> _openFeedback(
+    BuildContext context,
+    WidgetRef ref,
+    List<TaskLogModel> unread,
+  ) async {
+    final appUser = ref.read(appUserProvider).value;
+    if (appUser?.familyId == null || unread.isEmpty) return;
+    try {
+      await ref.read(taskLogRepositoryProvider).markFeedbackSeen(
+            familyId: appUser!.familyId!,
+            logIds: unread.map((l) => l.id).toList(),
+          );
+    } catch (_) {
+      // Marking-seen is a nice-to-have; don't block navigation on failure.
+    }
+    if (!context.mounted) return;
+    context.push('/kid/tasks');
+  }
+
   Future<void> _completeTask(
     BuildContext context,
     WidgetRef ref,
@@ -346,6 +380,81 @@ class KidDashboardScreen extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+class _FeedbackBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _FeedbackBanner({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withAlpha(25),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.primary.withAlpha(80)),
+        ),
+        child: Row(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.mark_email_unread,
+                    color: AppColors.primary, size: 22),
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentRed,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 18, minHeight: 16),
+                    child: Text(
+                      '$count',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count == 1
+                        ? '1 new message from your parent'
+                        : '$count new messages from your parent',
+                    style:
+                        AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('Tap to read them.', style: AppTextStyles.caption),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
   }
 }
 

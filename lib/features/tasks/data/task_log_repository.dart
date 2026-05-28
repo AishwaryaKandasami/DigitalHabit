@@ -151,6 +151,7 @@ class TaskLogRepository {
         'verifiedByParent': false,
         'parentFeedback': feedback?.name,
         'parentComment': cleanComment,
+        'seenByChild': false, // new feedback the kid hasn't acked yet
       });
       return;
     }
@@ -197,6 +198,7 @@ class TaskLogRepository {
         'verifiedByParent': true,
         'parentFeedback': feedback?.name,
         'parentComment': cleanComment,
+        'seenByChild': false, // new feedback the kid hasn't acked yet
       });
 
       final memberUpdates = <String, dynamic>{
@@ -226,6 +228,23 @@ class TaskLogRepository {
             ).toMap());
       }
     });
+  }
+
+  /// Mark a batch of task logs as "seen" by the kid (clears the new-feedback
+  /// badge on the dashboard). Silently does nothing on an empty list.
+  Future<void> markFeedbackSeen({
+    required String familyId,
+    required List<String> logIds,
+  }) async {
+    if (logIds.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final id in logIds) {
+      final ref = _firestore
+          .collection(FirestorePaths.taskLogs(familyId))
+          .doc(id);
+      batch.update(ref, {'seenByChild': true});
+    }
+    await batch.commit();
   }
 
   /// Apply daily mood decay retroactively based on last active date.
