@@ -10,8 +10,10 @@ import '../../planner/providers/planner_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../providers/task_providers.dart';
 import '../domain/reward_calculator.dart';
+import '../domain/task_log_model.dart';
 import '../data/task_log_repository.dart';
 import '../../../core/constants/game_constants.dart';
+import 'widgets/parent_feedback_chip.dart';
 
 class TaskCompletionScreen extends ConsumerWidget {
   const TaskCompletionScreen({super.key});
@@ -64,6 +66,10 @@ class TaskCompletionScreen extends ConsumerWidget {
                   ?.map((l) => l.taskId)
                   .toSet() ??
               {};
+          final logsByTaskId = <String, TaskLogModel>{
+            for (final l in (logsAsync.value ?? const <TaskLogModel>[]))
+              l.taskId: l,
+          };
 
           if (todayTasks.isEmpty) {
             return Center(
@@ -149,6 +155,7 @@ class TaskCompletionScreen extends ConsumerWidget {
                     return _TaskTile(
                       task: task,
                       isDone: isDone,
+                      log: logsByTaskId[task.taskId],
                       onComplete: isDone
                           ? null
                           : () => _completeTask(context, ref, plan, task),
@@ -260,11 +267,13 @@ class TaskCompletionScreen extends ConsumerWidget {
 class _TaskTile extends StatelessWidget {
   final TaskModel task;
   final bool isDone;
+  final TaskLogModel? log;
   final VoidCallback? onComplete;
 
   const _TaskTile({
     required this.task,
     required this.isDone,
+    this.log,
     this.onComplete,
   });
 
@@ -272,11 +281,13 @@ class _TaskTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final timeStr =
         '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
+    final hasFeedback = log != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: isDone ? AppColors.accentGreen.withAlpha(15) : null,
       child: ListTile(
+        isThreeLine: hasFeedback && log!.verifiedByParent != null,
         leading: Container(
           width: 44,
           height: 44,
@@ -298,9 +309,19 @@ class _TaskTile extends StatelessWidget {
             color: isDone ? AppColors.textSecondary : null,
           ),
         ),
-        subtitle: Text(
-          '$timeStr  •  ${task.duration}min  •  ${task.category.displayName}',
-          style: AppTextStyles.caption,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$timeStr  •  ${task.duration}min  •  ${task.category.displayName}',
+              style: AppTextStyles.caption,
+            ),
+            if (hasFeedback)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ParentFeedbackChip(log: log!),
+              ),
+          ],
         ),
         trailing: isDone
             ? const Icon(Icons.check_circle, color: AppColors.accentGreen)

@@ -11,6 +11,8 @@ import '../../planner/domain/plan_model.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../tasks/providers/task_providers.dart';
 import '../../tasks/domain/reward_calculator.dart';
+import '../../tasks/domain/task_log_model.dart';
+import '../../tasks/presentation/widgets/parent_feedback_chip.dart';
 import '../../auth/providers/auth_providers.dart';
 
 class KidDashboardScreen extends ConsumerWidget {
@@ -49,6 +51,10 @@ class KidDashboardScreen extends ConsumerWidget {
         : [];
     final completedTaskIds =
         logsAsync.value?.map((l) => l.taskId).toSet() ?? {};
+    final logsByTaskId = <String, TaskLogModel>{
+      for (final l in (logsAsync.value ?? const <TaskLogModel>[]))
+        l.taskId: l,
+    };
     final doneCount =
         todayTasks.where((t) => completedTaskIds.contains(t.taskId)).length;
     final totalCount = todayTasks.length;
@@ -225,6 +231,7 @@ class KidDashboardScreen extends ConsumerWidget {
                 // Show up to 5 tasks inline
                 ...todayTasks.take(5).map((task) {
                   final isDone = completedTaskIds.contains(task.taskId);
+                  final log = logsByTaskId[task.taskId];
                   final timeStr =
                       '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
                   return Card(
@@ -233,6 +240,7 @@ class KidDashboardScreen extends ConsumerWidget {
                         ? AppColors.accentGreen.withAlpha(15)
                         : null,
                     child: ListTile(
+                      isThreeLine: log != null && log.verifiedByParent != null,
                       leading: Container(
                         width: 40,
                         height: 40,
@@ -258,8 +266,18 @@ class KidDashboardScreen extends ConsumerWidget {
                           color: isDone ? AppColors.textSecondary : null,
                         ),
                       ),
-                      subtitle: Text('$timeStr  •  ${task.duration}min',
-                          style: AppTextStyles.caption),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$timeStr  •  ${task.duration}min',
+                              style: AppTextStyles.caption),
+                          if (log != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: ParentFeedbackChip(log: log),
+                            ),
+                        ],
+                      ),
                       trailing: isDone
                           ? const Icon(Icons.check_circle,
                               color: AppColors.accentGreen, size: 24)
