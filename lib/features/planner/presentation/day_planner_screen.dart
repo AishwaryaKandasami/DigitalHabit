@@ -62,7 +62,8 @@ class DayPlannerScreen extends ConsumerWidget {
               tasks: tasks,
               isEditable: isEditable,
               onTapTask: (task) => _editTask(context, ref, task),
-              onDeleteTask: (task) => _deleteTask(ref, task),
+              onDeleteTask: (task) =>
+                  _deleteTaskWithPrompt(context, ref, task),
               onAddAt: (hour, minute) =>
                   _addTask(context, ref, initialHour: hour, initialMinute: minute),
             ),
@@ -86,6 +87,13 @@ class DayPlannerScreen extends ConsumerWidget {
     );
     if (task == null) return;
     _updateDraftWithTask(ref, task);
+    if (!context.mounted) return;
+    _promptApplyToOtherDays(
+      context,
+      ref,
+      'Added "${task.title}".',
+      onApply: () => _propagateAdd(ref, task),
+    );
   }
 
   Future<void> _editTask(
@@ -101,6 +109,13 @@ class DayPlannerScreen extends ConsumerWidget {
     );
     if (updated == null) return;
     _replaceDraftTask(ref, existing.taskId, updated);
+    if (!context.mounted) return;
+    _promptApplyToOtherDays(
+      context,
+      ref,
+      'Updated "${updated.title}".',
+      onApply: () => _propagateEdit(ref, original: existing, updated: updated),
+    );
   }
 
   void _deleteTask(WidgetRef ref, TaskModel task) {
@@ -110,6 +125,146 @@ class DayPlannerScreen extends ConsumerWidget {
       ..removeWhere((t) => t.taskId == task.taskId);
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = dayTasks;
+    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+  }
+
+  /// Called from the hourly grid after a long-press / close-icon delete.
+  /// Same signature as _deleteTask but also surfaces the apply-to-others prompt.
+  void _deleteTaskWithPrompt(
+    BuildContext context,
+    WidgetRef ref,
+    TaskModel task,
+  ) {
+    _deleteTask(ref, task);
+    _promptApplyToOtherDays(
+      context,
+      ref,
+      'Removed "${task.title}".',
+      onApply: () => _propagateDelete(ref, task),
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Apply-to-other-days propagation
+  // ---------------------------------------------------------------
+
+  /// Identifies a "same" task across days by title + start time.
+  bool _matches(TaskModel a, TaskModel b) =>
+      a.title == b.title && a.hour == b.hour && a.minute == b.minute;
+
+  void _promptApplyToOtherDays(
+    BuildContext context,
+    WidgetRef ref,
+    String summary, {
+    required VoidCallback onApply,
+  }) {
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$summary  Apply to other days this week?'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Apply to all',
+            onPressed: () {
+              onApply();
+              ScaffoldMessenger.of(context)
+                ..removeCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text('Updated the rest of the week.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+            },
+          ),
+        ),
+      );
+  }
+
+  /// Copy a newly-added task into every other day in the week. Skips days
+  /// that already have a matching (title, time) task to avoid duplicates.
+  void _propagateAdd(WidgetRef ref, TaskModel added) {
+    final draft = ref.read(draftPlanProvider);
+    if (draft == null) return;
+    final newDays = Map<String, List<TaskModel>>.from(draft.days);
+    for (final d in PlanModel.dayNames) {
+      if (d == dayName) continue;
+      final tasks = List<TaskModel>.from(draft.tasksForDay(d));
+      if (tasks.any((t) => _matches(t, added))) continue;
+      tasks.add(TaskModel(
+        taskId: IdGenerator.uuid(),
+        hour: added.hour,
+        minute: added.minute,
+        duration: added.duration,
+        title: added.title,
+        category: added.category,
+        customCategoryName: added.customCategoryName,
+        isDigitalActivity: added.isDigitalActivity,
+        isHealthy: added.isHealthy,
+      ));
+      newDays[d] = tasks;
+    }
+    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+  }
+
+  /// On every other day, find the task that matched the ORIGINAL (title, time)
+  /// and update its fields to the new title/time/duration/category. If a day
+  /// has no matching task, add a fresh copy of the updated task there.
+  void _propagateEdit(
+    WidgetRef ref, {
+    required TaskModel original,
+    required TaskModel updated,
+  }) {
+    final draft = ref.read(draftPlanProvider);
+    if (draft == null) return;
+    final newDays = Map<String, List<TaskModel>>.from(draft.days);
+    for (final d in PlanModel.dayNames) {
+      if (d == dayName) continue;
+      final tasks = List<TaskModel>.from(draft.tasksForDay(d));
+      final idx = tasks.indexWhere((t) => _matches(t, original));
+      if (idx >= 0) {
+        tasks[idx] = TaskModel(
+          taskId: tasks[idx].taskId, // keep id stable on edit
+          hour: updated.hour,
+          minute: updated.minute,
+          duration: updated.duration,
+          title: updated.title,
+          category: updated.category,
+          customCategoryName: updated.customCategoryName,
+          isDigitalActivity: updated.isDigitalActivity,
+          isHealthy: updated.isHealthy,
+        );
+      } else if (!tasks.any((t) => _matches(t, updated))) {
+        // No original to update AND no duplicate of the new one — add fresh.
+        tasks.add(TaskModel(
+          taskId: IdGenerator.uuid(),
+          hour: updated.hour,
+          minute: updated.minute,
+          duration: updated.duration,
+          title: updated.title,
+          category: updated.category,
+          customCategoryName: updated.customCategoryName,
+          isDigitalActivity: updated.isDigitalActivity,
+          isHealthy: updated.isHealthy,
+        ));
+      }
+      newDays[d] = tasks;
+    }
+    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+  }
+
+  /// Remove tasks that match (title, time) on every other day.
+  void _propagateDelete(WidgetRef ref, TaskModel removed) {
+    final draft = ref.read(draftPlanProvider);
+    if (draft == null) return;
+    final newDays = Map<String, List<TaskModel>>.from(draft.days);
+    for (final d in PlanModel.dayNames) {
+      if (d == dayName) continue;
+      final tasks = List<TaskModel>.from(draft.tasksForDay(d))
+        ..removeWhere((t) => _matches(t, removed));
+      newDays[d] = tasks;
+    }
     ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
   }
 
