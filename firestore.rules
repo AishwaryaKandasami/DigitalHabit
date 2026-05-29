@@ -60,6 +60,15 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null;
       }
+
+      // Messages subcollection (parent -> kid notes and app nudges)
+      match /messages/{msgId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        // Kid marks them seen; parent could edit/delete in future.
+        allow update: if request.auth != null;
+        allow delete: if request.auth != null;
+      }
     }
   }
 }

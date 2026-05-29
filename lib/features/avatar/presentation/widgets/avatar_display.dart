@@ -13,11 +13,22 @@ class AvatarDisplay extends StatelessWidget {
   /// for small (<120) renderings to keep badges on nav / header clean.
   final bool showMoodNote;
 
+  /// Optional override text for the speech bubble. When provided (e.g. an
+  /// unread parent message), the bubble shows this with a "From X" tag
+  /// instead of the mood note. Tapping it fires [onMessageTap] (usually
+  /// "mark as read"). Pass null to fall back to the mood note.
+  final String? messageOverride;
+  final String? messageFromName;
+  final VoidCallback? onMessageTap;
+
   const AvatarDisplay({
     super.key,
     required this.avatarState,
     this.size = 200,
     this.showMoodNote = true,
+    this.messageOverride,
+    this.messageFromName,
+    this.onMessageTap,
   });
 
   String get _stageEmoji {
@@ -143,13 +154,97 @@ class AvatarDisplay extends StatelessWidget {
       return avatar;
     }
 
+    final hasMessage =
+        messageOverride != null && messageOverride!.trim().isNotEmpty;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _MoodChatBubble(text: _moodNote, mood: avatarState.moodScore),
+        if (hasMessage)
+          _ParentMessageBubble(
+            text: messageOverride!,
+            fromName: messageFromName ?? 'Parent',
+            onTap: onMessageTap,
+          )
+        else
+          _MoodChatBubble(text: _moodNote, mood: avatarState.moodScore),
         const SizedBox(height: 8),
         avatar,
       ],
+    );
+  }
+}
+
+class _ParentMessageBubble extends StatelessWidget {
+  final String text;
+  final String fromName;
+  final VoidCallback? onTap;
+
+  const _ParentMessageBubble({
+    required this.text,
+    required this.fromName,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AppColors.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: 280),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: color.withAlpha(40),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withAlpha(140)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.chat_bubble, size: 12, color: color),
+                    const SizedBox(width: 4),
+                    Text(
+                      'From $fromName',
+                      style: AppTextStyles.caption.copyWith(color: color),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  text,
+                  style: AppTextStyles.bodyBold.copyWith(color: color),
+                ),
+                if (onTap != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Tap to dismiss',
+                    style: AppTextStyles.caption.copyWith(
+                      color: color.withAlpha(180),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          CustomPaint(
+            size: const Size(14, 8),
+            painter: _BubbleTailPainter(
+              color: color.withAlpha(40),
+              border: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

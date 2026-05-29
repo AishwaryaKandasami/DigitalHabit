@@ -13,7 +13,9 @@ import '../../tasks/providers/task_providers.dart';
 import '../../tasks/domain/reward_calculator.dart';
 import '../../tasks/domain/task_log_model.dart';
 import '../../tasks/presentation/widgets/parent_feedback_chip.dart';
+import '../../messages/providers/message_providers.dart';
 import '../../auth/providers/auth_providers.dart';
+import 'widgets/nudge_banner.dart';
 
 class KidDashboardScreen extends ConsumerWidget {
   const KidDashboardScreen({super.key});
@@ -58,6 +60,8 @@ class KidDashboardScreen extends ConsumerWidget {
     final unreadLogs = (logsAsync.value ?? const <TaskLogModel>[])
         .where((l) => l.hasUnreadFeedback)
         .toList();
+    final latestMessage = ref.watch(latestUnreadMessageProvider);
+    final unreadMessageCount = ref.watch(unreadMessagesCountProvider);
     final doneCount =
         todayTasks.where((t) => completedTaskIds.contains(t.taskId)).length;
     final totalCount = todayTasks.length;
@@ -100,9 +104,18 @@ class KidDashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
 
-              // Avatar
+              // Avatar (speech bubble switches to parent's latest unread
+              // message when one exists; mood note otherwise).
               Center(
-                child: AvatarDisplay(avatarState: avatar, size: 160),
+                child: AvatarDisplay(
+                  avatarState: avatar,
+                  size: 160,
+                  messageOverride: latestMessage?.text,
+                  messageFromName: latestMessage?.fromName,
+                  onMessageTap: latestMessage == null
+                      ? null
+                      : () => _dismissMessages(context, ref),
+                ),
               ),
               const SizedBox(height: 8),
               Center(
@@ -113,15 +126,25 @@ class KidDashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
 
-              // New feedback banner (only when there's unread parent feedback)
-              if (unreadLogs.isNotEmpty) ...[
+              // Combined "new from parent" banner (task feedback + messages).
+              if (unreadLogs.isNotEmpty || unreadMessageCount > 0) ...[
                 _FeedbackBanner(
-                  count: unreadLogs.length,
+                  count: unreadLogs.length + unreadMessageCount,
                   onTap: () =>
                       _openFeedback(context, ref, unreadLogs),
                 ),
                 const SizedBox(height: 16),
               ],
+
+              // Smart in-app reminder ("it's mid-day, X tasks left"). Driven
+              // by today's progress + time of day, refreshes every 2h.
+              NudgeBanner(
+                doneCount: todayTasks
+                    .where((t) => completedTaskIds.contains(t.taskId))
+                    .length,
+                totalCount: todayTasks.length,
+              ),
+              const SizedBox(height: 16),
 
               // XP bar
               XpBar(
@@ -308,25 +331,56 @@ class KidDashboardScreen extends ConsumerWidget {
     );
   }
 
-  /// Mark all currently-unread feedback logs as seen and jump to the
-  /// Today's Tasks screen so the kid actually sees the comments.
+  /// Mark all currently-unread feedback logs + parent messages as seen and
+  /// jump to the Today's Tasks screen so the kid actually sees the comments.
   Future<void> _openFeedback(
     BuildContext context,
     WidgetRef ref,
     List<TaskLogModel> unread,
   ) async {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser?.familyId == null || unread.isEmpty) return;
+    if (appUser?.familyId == null) return;
     try {
-      await ref.read(taskLogRepositoryProvider).markFeedbackSeen(
-            familyId: appUser!.familyId!,
-            logIds: unread.map((l) => l.id).toList(),
-          );
+      if (unread.isNotEmpty) {
+        await ref.read(taskLogRepositoryProvider).markFeedbackSeen(
+              familyId: appUser!.familyId!,
+              logIds: unread.map((l) => l.id).toList(),
+            );
+      }
+      // Also mark unread parent messages as seen.
+      final msgs = ref.read(myMessagesProvider).value ?? const [];
+      final unreadMsgIds =
+          msgs.where((m) => !m.seenByChild).map((m) => m.id).toList();
+      if (unreadMsgIds.isNotEmpty) {
+        await ref.read(messageRepositoryProvider).markAllSeen(
+              familyId: appUser!.familyId!,
+              messageIds: unreadMsgIds,
+            );
+      }
     } catch (_) {
       // Marking-seen is a nice-to-have; don't block navigation on failure.
     }
     if (!context.mounted) return;
     context.push('/kid/tasks');
+  }
+
+  /// Tap on the avatar's parent-message bubble: clear all unread messages
+  /// so the bubble reverts to the mood note. Stays on dashboard.
+  Future<void> _dismissMessages(BuildContext context, WidgetRef ref) async {
+    final appUser = ref.read(appUserProvider).value;
+    if (appUser?.familyId == null) return;
+    final msgs = ref.read(myMessagesProvider).value ?? const [];
+    final unreadIds =
+        msgs.where((m) => !m.seenByChild).map((m) => m.id).toList();
+    if (unreadIds.isEmpty) return;
+    try {
+      await ref.read(messageRepositoryProvider).markAllSeen(
+            familyId: appUser!.familyId!,
+            messageIds: unreadIds,
+          );
+    } catch (_) {
+      // best-effort
+    }
   }
 
   Future<void> _completeTask(

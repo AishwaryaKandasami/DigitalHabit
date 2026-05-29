@@ -7,6 +7,7 @@ import '../../../core/constants/game_constants.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../../family/providers/family_providers.dart';
 import '../../family/domain/member_model.dart';
+import '../../messages/presentation/send_message_dialog.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../tasks/providers/task_providers.dart';
 
@@ -68,6 +69,17 @@ class ParentDashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+
+              // Send a message — quick mid-day praise / nudge.
+              _SendMessageBanner(
+                onTap: children.isEmpty
+                    ? null
+                    : () => showDialog(
+                          context: context,
+                          builder: (_) => const SendMessageDialog(),
+                        ),
+              ),
               const SizedBox(height: 24),
 
               // Children overview
@@ -100,7 +112,14 @@ class ParentDashboardScreen extends ConsumerWidget {
                   ),
                 )
               else
-                ...children.map((child) => _ChildProgressCard(child: child)),
+                ...children.map((child) => _ChildProgressCard(
+                      child: child,
+                      onSendMessage: () => showDialog(
+                        context: context,
+                        builder: (_) =>
+                            SendMessageDialog(initialChild: child),
+                      ),
+                    )),
             ],
           ),
         ),
@@ -180,8 +199,9 @@ class _ActionBanner extends StatelessWidget {
 
 class _ChildProgressCard extends StatelessWidget {
   final MemberModel child;
+  final VoidCallback? onSendMessage;
 
-  const _ChildProgressCard({required this.child});
+  const _ChildProgressCard({required this.child, this.onSendMessage});
 
   @override
   Widget build(BuildContext context) {
@@ -257,6 +277,13 @@ class _ChildProgressCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onSendMessage != null)
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline,
+                        color: AppColors.primary),
+                    tooltip: 'Send a message',
+                    onPressed: onSendMessage,
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -310,6 +337,62 @@ class _ChildProgressCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SendMessageBanner extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _SendMessageBanner({this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        color: enabled ? AppColors.primary.withAlpha(20) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.chat_bubble,
+                  color: enabled
+                      ? AppColors.primary
+                      : AppColors.textSecondary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      enabled
+                          ? 'Send a message'
+                          : 'Add a child to send messages',
+                      style: AppTextStyles.bodyBold.copyWith(
+                        color: enabled
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                    if (enabled) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Quick praise or a mid-day nudge.',
+                        style: AppTextStyles.caption,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (enabled)
+                const Icon(Icons.chevron_right, color: AppColors.primary),
+            ],
+          ),
         ),
       ),
     );
