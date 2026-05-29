@@ -35,11 +35,17 @@ class SendMessageDialog extends ConsumerStatefulWidget {
 }
 
 class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
-  late MemberModel? _selectedChild = widget.initialChild;
+  MemberModel? _selectedChild;
   MessageKind _kind = MessageKind.praise;
   final _textController = TextEditingController();
   bool _sending = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedChild = widget.initialChild;
+  }
 
   @override
   void dispose() {
@@ -47,21 +53,26 @@ class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
     super.dispose();
   }
 
+  /// Resolve the recipient for this send: explicit selection wins, else
+  /// fall back to the single child when there's only one in the family.
+  MemberModel? _resolveRecipient(List<MemberModel> children) {
+    if (_selectedChild != null &&
+        children.any((c) => c.id == _selectedChild!.id)) {
+      return _selectedChild;
+    }
+    if (children.length == 1) return children.first;
+    return null;
+  }
+
   Future<void> _send() async {
     final text = _textController.text.trim();
+    final children = ref.read(childMembersProvider);
+    final recipient = _resolveRecipient(children);
 
-    // Belt-and-suspenders: if the user opened the dialog with a single
-    // child in the family, auto-pick them here too (in case the build-time
-    // auto-select missed for any reason).
-    if (_selectedChild == null) {
-      final children = ref.read(childMembersProvider);
-      if (children.length == 1) {
-        _selectedChild = children.first;
-      }
-    }
-
-    if (_selectedChild == null) {
-      setState(() => _error = 'Pick a child to message.');
+    if (recipient == null) {
+      setState(() => _error = children.isEmpty
+          ? 'No kids in this family yet.'
+          : 'Pick a child to message.');
       return;
     }
     if (text.isEmpty) {
@@ -77,7 +88,7 @@ class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
       if (appUser == null) return;
       await ref.read(messageRepositoryProvider).sendMessage(
             familyId: appUser.familyId!,
-            toMemberId: _selectedChild!.id,
+            toMemberId: recipient.id,
             fromUid: appUser.uid,
             fromName: 'Parent',
             text: text,
@@ -87,7 +98,7 @@ class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Message sent to ${_selectedChild!.displayName}.'),
+          content: Text('Message sent to ${recipient.displayName}.'),
           backgroundColor: AppColors.accentGreen,
         ),
       );
