@@ -95,6 +95,11 @@ class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
         !children.any((c) => c.id == _selectedChild!.id)) {
       _selectedChild = null;
     }
+    // If there's only one kid in the family, auto-select them so the Send
+    // button works without an extra tap.
+    if (_selectedChild == null && children.length == 1) {
+      _selectedChild = children.first;
+    }
 
     final templates = _kind == MessageKind.praise
         ? _praiseTemplates
