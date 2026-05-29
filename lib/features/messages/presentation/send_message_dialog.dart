@@ -49,6 +49,17 @@ class _SendMessageDialogState extends ConsumerState<SendMessageDialog> {
 
   Future<void> _send() async {
     final text = _textController.text.trim();
+
+    // Belt-and-suspenders: if the user opened the dialog with a single
+    // child in the family, auto-pick them here too (in case the build-time
+    // auto-select missed for any reason).
+    if (_selectedChild == null) {
+      final children = ref.read(childMembersProvider);
+      if (children.length == 1) {
+        _selectedChild = children.first;
+      }
+    }
+
     if (_selectedChild == null) {
       setState(() => _error = 'Pick a child to message.');
       return;
