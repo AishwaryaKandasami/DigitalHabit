@@ -193,12 +193,33 @@ class DayPlannerScreen extends ConsumerWidget {
                 const SizedBox(width: 4),
                 FilledButton.icon(
                   onPressed: () {
+                    // Snapshot the draft BEFORE propagation so the kid can
+                    // undo the cross-day spread if they tapped by mistake.
+                    final snapshot = ref.read(draftPlanProvider);
                     onApply();
                     messenger.removeCurrentSnackBar();
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Updated all days this week.'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: const Text('Updated all days this week.'),
+                        duration: const Duration(seconds: 5),
+                        action: snapshot == null
+                            ? null
+                            : SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () {
+                                  ref
+                                      .read(draftPlanProvider.notifier)
+                                      .set(snapshot);
+                                  messenger.removeCurrentSnackBar();
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Reverted to just this day.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
                     );
                   },
