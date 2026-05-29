@@ -152,34 +152,70 @@ class DayPlannerScreen extends ConsumerWidget {
   bool _matches(TaskModel a, TaskModel b) =>
       a.title == b.title && a.hour == b.hour && a.minute == b.minute;
 
+  /// Show a snackbar after an add/edit/delete with TWO explicit choices:
+  /// keep the change local to this day, or apply it to every day in the
+  /// week. The kid actively picks instead of having to know that ignoring
+  /// the snackbar means "just this day".
   void _promptApplyToOtherDays(
     BuildContext context,
     WidgetRef ref,
     String summary, {
     required VoidCallback onApply,
   }) {
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('$summary  Apply to other days this week?'),
-          duration: const Duration(seconds: 6),
-          action: SnackBarAction(
-            label: 'Apply to all',
-            onPressed: () {
-              onApply();
-              ScaffoldMessenger.of(context)
-                ..removeCurrentSnackBar()
-                ..showSnackBar(
-                  const SnackBar(
-                    content: Text('Updated the rest of the week.'),
-                    duration: Duration(seconds: 2),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        behavior: SnackBarBehavior.floating,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(summary, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 2),
+            const Text(
+              'Just today, or every day this week?',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => messenger.removeCurrentSnackBar(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
                   ),
-                );
-            },
-          ),
+                  child: const Text('Just today'),
+                ),
+                const SizedBox(width: 4),
+                FilledButton.icon(
+                  onPressed: () {
+                    onApply();
+                    messenger.removeCurrentSnackBar();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Updated all days this week.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.repeat, size: 16),
+                  label: const Text('All days'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accentGreen,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   /// Copy a newly-added task into every other day in the week. Skips days
