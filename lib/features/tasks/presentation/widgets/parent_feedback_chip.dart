@@ -25,17 +25,15 @@ class ParentFeedbackChip extends StatelessWidget {
     final String label;
 
     if (verified == false) {
-      icon = Icons.cancel_outlined;
-      color = AppColors.accentRed;
-      label = comment.isNotEmpty
-          ? '"$comment"'
-          : 'Marked not done — please try again.';
+      // Not actually done — kept gentle, never shaming.
+      icon = Icons.spa;
+      color = AppColors.accent;
+      label = comment.isNotEmpty ? '"$comment"' : 'Try again tomorrow 🌱';
     } else if (log.parentFeedback == ParentFeedback.negative) {
-      icon = Icons.thumb_down;
-      color = AppColors.accentRed;
-      label = comment.isNotEmpty
-          ? '"$comment"'
-          : 'Parent says: needs improvement.';
+      // "Needs work" — warm encouragement, no red, no penalty.
+      icon = Icons.eco;
+      color = AppColors.accent;
+      label = comment.isNotEmpty ? '"$comment"' : 'Try again tomorrow 🌱';
     } else {
       // approved (positive or no explicit feedback)
       icon = log.parentFeedback == ParentFeedback.positive
@@ -45,7 +43,7 @@ class ParentFeedbackChip extends StatelessWidget {
       label = comment.isNotEmpty
           ? '"$comment"'
           : (log.parentFeedback == ParentFeedback.positive
-              ? 'Parent says: great job!'
+              ? 'Parent says: great job! 💛'
               : 'Verified by parent ✓');
     }
 

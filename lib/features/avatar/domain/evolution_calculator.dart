@@ -35,10 +35,12 @@ class EvolutionCalculator {
     );
   }
 
-  /// Apply mood change and clamp to 0-100.
+  /// Apply mood change. All-positive tone: the creature never drops below the
+  /// "Sad" threshold, so it can never look sick/miserable. Upper clamp is the
+  /// normal max.
   static AvatarState applyMoodChange(AvatarState state, int delta) {
-    final newMood =
-        (state.moodScore + delta).clamp(0, GameConstants.moodMax);
+    final newMood = (state.moodScore + delta)
+        .clamp(GameConstants.moodSadThreshold, GameConstants.moodMax);
     return state.copyWith(moodScore: newMood);
   }
 

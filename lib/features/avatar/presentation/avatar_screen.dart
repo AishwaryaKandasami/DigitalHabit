@@ -8,13 +8,86 @@ import '../../../core/constants/game_constants.dart';
 import '../../../core/widgets/xp_bar.dart';
 import '../../../core/widgets/mood_indicator.dart';
 import '../../family/providers/family_providers.dart';
+import '../../shop/providers/shop_providers.dart';
+import '../../auth/providers/auth_providers.dart';
+import '../domain/evolution_calculator.dart';
 import 'widgets/avatar_display.dart';
 
-class AvatarScreen extends ConsumerWidget {
+class AvatarScreen extends ConsumerStatefulWidget {
   const AvatarScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AvatarScreen> createState() => _AvatarScreenState();
+}
+
+class _AvatarScreenState extends ConsumerState<AvatarScreen> {
+  int _celebrateSignal = 0;
+  DateTime? _lastPetWrite;
+
+  Future<void> _petCreature() async {
+    final now = DateTime.now();
+    if (_lastPetWrite != null &&
+        now.difference(_lastPetWrite!).inSeconds < 20) {
+      return;
+    }
+    _lastPetWrite = now;
+    final appUser = ref.read(appUserProvider).value;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null ||
+        appUser?.memberId == null ||
+        member == null) {
+      return;
+    }
+    try {
+      final updated =
+          EvolutionCalculator.applyMoodChange(member.avatarState, 1);
+      await ref.read(familyRepositoryProvider).updateMember(
+            appUser!.familyId!,
+            appUser.memberId!,
+            {'avatarState': updated.toMap()},
+          );
+    } catch (_) {
+      // best-effort
+    }
+  }
+
+  Future<void> _giveTreat() async {
+    final appUser = ref.read(appUserProvider).value;
+    if (appUser?.familyId == null || appUser?.memberId == null) return;
+    try {
+      final eaten = await ref.read(shopRepositoryProvider).giveDailyTreat(
+            familyId: appUser!.familyId!,
+            memberId: appUser.memberId!,
+          );
+      if (!mounted) return;
+      if (eaten) {
+        setState(() => _celebrateSignal++);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Yum! 🍎 Your creature feels great!'),
+            backgroundColor: AppColors.accentGreen,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Already had a treat today! 💤'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final member = ref.watch(currentMemberProvider);
     if (member == null) {
       return const Scaffold(
@@ -30,9 +103,20 @@ class AvatarScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            // Avatar display
-            AvatarDisplay(avatarState: avatar, size: 200),
-            const SizedBox(height: 24),
+            // Avatar display — tap to pet, celebrates on treat.
+            AvatarDisplay(
+              avatarState: avatar,
+              size: 200,
+              celebrateSignal: _celebrateSignal,
+              onTapPet: _petCreature,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _giveTreat,
+              icon: const Text('🍎', style: TextStyle(fontSize: 16)),
+              label: const Text('Give a treat'),
+            ),
+            const SizedBox(height: 16),
 
             // Name and stage
             Text(avatar.creatureName, style: AppTextStyles.heading2),

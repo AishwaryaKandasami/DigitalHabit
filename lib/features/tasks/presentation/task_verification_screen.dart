@@ -125,10 +125,10 @@ class TaskVerificationScreen extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isNegative
-                ? '${log.title}: feedback sent. Coins reduced.'
+                ? '${log.title}: gentle note sent 🌱'
                 : '${log.title} verified! Bonus awarded.'),
             backgroundColor: isNegative
-                ? AppColors.accentRed
+                ? AppColors.accent
                 : AppColors.accentGreen,
           ),
         );
@@ -247,12 +247,12 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                   ButtonSegment(
                     value: ParentFeedback.positive,
                     icon: Icon(Icons.thumb_up),
-                    label: Text('Good'),
+                    label: Text('Great'),
                   ),
                   ButtonSegment(
                     value: ParentFeedback.negative,
-                    icon: Icon(Icons.thumb_down),
-                    label: Text('Needs work'),
+                    icon: Icon(Icons.eco),
+                    label: Text('Keep trying'),
                   ),
                 ],
                 selected: {_feedback},
@@ -264,15 +264,15 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: (isNegative
-                          ? AppColors.accentRed
+                          ? AppColors.accent
                           : AppColors.accentGreen)
                       .withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   isNegative
-                      ? 'Your kid will lose some coins and their avatar will be a bit sad.'
-                      : 'Your kid gets a coin + XP bonus and their avatar will cheer up.',
+                      ? "We'll gently encourage them to try again — no points lost. 🌱"
+                      : 'Your kid gets a coin + XP bonus and their creature cheers up! 💛',
                   style: AppTextStyles.caption,
                 ),
               ),
@@ -306,9 +306,9 @@ class _ReviewDialogState extends State<_ReviewDialog> {
           ),
           style: FilledButton.styleFrom(
             backgroundColor:
-                isNegative ? AppColors.accentRed : AppColors.accentGreen,
+                isNegative ? AppColors.accent : AppColors.accentGreen,
           ),
-          child: Text(isNegative ? 'Send feedback' : 'Approve'),
+          child: Text(isNegative ? 'Send a note' : 'Approve'),
         ),
       ],
     );

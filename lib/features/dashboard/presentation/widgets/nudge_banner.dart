@@ -43,17 +43,17 @@ class _NudgeBannerState extends State<NudgeBanner> {
     final done = widget.doneCount;
     final total = widget.totalCount;
 
-    // Edge cases first.
+    // Always warm and encouraging — never critical, never red.
     if (total == 0) {
       return (
-        text: 'No tasks planned today — enjoy a free day! 🎉',
+        text: 'Free day — enjoy! 🎉',
         icon: Icons.wb_sunny,
         color: AppColors.accent,
       );
     }
     if (done >= total) {
       return (
-        text: 'All $total tasks done — your creature is proud! ⭐',
+        text: 'All done — amazing! ⭐',
         icon: Icons.celebration,
         color: AppColors.accentGreen,
       );
@@ -61,60 +61,45 @@ class _NudgeBannerState extends State<NudgeBanner> {
 
     final remaining = total - done;
 
-    // Expected progress at this point in the day (between 8 AM and 8 PM).
-    const startHour = 8;
-    const endHour = 20;
-    final clamped = hour.clamp(startHour, endHour);
-    final expected = ((clamped - startHour) / (endHour - startHour) * total)
-        .round();
-    final behind = done < expected - 1; // small grace
-
-    // Time-of-day buckets.
     if (hour < 10) {
       return (
-        text: 'Good morning! $remaining tasks for today.',
-        icon: Icons.coffee,
-        color: AppColors.accent,
+        text: 'Good morning! $remaining to go 🌞',
+        icon: Icons.wb_twilight,
+        color: AppColors.primary,
       );
     }
     if (hour < 12) {
       return (
-        text: behind
-            ? 'Morning check-in: $done of $total done. Time to get going!'
-            : 'Morning check-in: $done of $total done — keep it up!',
+        text: '$done of $total done — keep it up! 💪',
         icon: Icons.directions_run,
-        color: behind ? AppColors.accentRed : AppColors.primary,
+        color: AppColors.primary,
       );
     }
     if (hour < 15) {
       return (
-        text: behind
-            ? 'Lunchtime nudge — only $done of $total done. Time to catch up.'
-            : 'Halfway through — $done of $total done. Great pace!',
+        text: 'Great pace — $remaining left! 🌟',
         icon: Icons.restaurant,
-        color: behind ? AppColors.accentRed : AppColors.accentGreen,
+        color: AppColors.accentGreen,
       );
     }
     if (hour < 18) {
       return (
-        text: behind
-            ? 'Afternoon: $remaining still to go. You can do it!'
-            : 'Afternoon: $remaining left. Almost there!',
+        text: 'Almost there — $remaining to go! ✨',
         icon: Icons.bolt,
-        color: behind ? AppColors.accentRed : AppColors.primary,
+        color: AppColors.primary,
       );
     }
     if (hour < 20) {
       return (
-        text: 'Evening wrap-up: $remaining more to finish strong! 🏁',
+        text: 'Finish strong — $remaining left! 🏁',
         icon: Icons.nightlight,
         color: AppColors.primary,
       );
     }
     return (
-      text: 'Wind-down time — tomorrow is a new day! 🌙',
+      text: 'Great day — rest up! 🌙',
       icon: Icons.bedtime,
-      color: AppColors.textSecondary,
+      color: AppColors.primary,
     );
   }
 

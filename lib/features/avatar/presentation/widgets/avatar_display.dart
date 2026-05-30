@@ -5,21 +5,35 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/constants/game_constants.dart';
 import '../../domain/avatar_state.dart';
 
-class AvatarDisplay extends StatelessWidget {
+/// A living, interactive creature display.
+///
+/// - Idles with gentle breathing, bobbing and occasional blinks.
+/// - Tapping it makes it pop + wiggle and puffs out floating hearts
+///   (and fires [onTapPet] so the caller can give a small mood boost).
+/// - Bumping [celebrateSignal] (an int the parent owns) plays a happy jump
+///   + a sparkle burst — used for "task done" / "level up" moments.
+/// - Keeps the speech bubble (mood note, or a parent-message override).
+class AvatarDisplay extends StatefulWidget {
   final AvatarState avatarState;
   final double size;
 
-  /// Whether to show a mood-based chat-bubble above the avatar. Auto-hides
-  /// for small (<120) renderings to keep badges on nav / header clean.
+  /// Whether to show the chat-bubble above the avatar. Auto-hides for small
+  /// (<120) renderings used in nav / headers.
   final bool showMoodNote;
 
-  /// Optional override text for the speech bubble. When provided (e.g. an
-  /// unread parent message), the bubble shows this with a "From X" tag
-  /// instead of the mood note. Tapping it fires [onMessageTap] (usually
-  /// "mark as read"). Pass null to fall back to the mood note.
+  /// Optional override text for the speech bubble (e.g. an unread parent
+  /// message). Tapping the bubble fires [onMessageTap].
   final String? messageOverride;
   final String? messageFromName;
   final VoidCallback? onMessageTap;
+
+  /// Increment this from the parent to trigger a one-shot celebration
+  /// (happy jump + sparkles). Must be a value the parent owns locally so the
+  /// change is detected in didUpdateWidget.
+  final int celebrateSignal;
+
+  /// Called when the kid taps (pets) the creature.
+  final VoidCallback? onTapPet;
 
   const AvatarDisplay({
     super.key,
@@ -29,82 +43,115 @@ class AvatarDisplay extends StatelessWidget {
     this.messageOverride,
     this.messageFromName,
     this.onMessageTap,
+    this.celebrateSignal = 0,
+    this.onTapPet,
   });
 
+  @override
+  State<AvatarDisplay> createState() => _AvatarDisplayState();
+}
+
+class _AvatarDisplayState extends State<AvatarDisplay> {
+  int _tapKey = 0;
+  int _celebrateKey = 0;
+  int _burstSeq = 0;
+  final List<_Burst> _bursts = [];
+
+  AvatarState get _a => widget.avatarState;
+
+  @override
+  void didUpdateWidget(covariant AvatarDisplay old) {
+    super.didUpdateWidget(old);
+    if (widget.celebrateSignal != old.celebrateSignal) {
+      _celebrate();
+    }
+  }
+
+  void _onTap() {
+    setState(() => _tapKey++);
+    _spawnBurst(const ['💛', '❤️', '✨'], count: 4);
+    widget.onTapPet?.call();
+  }
+
+  void _celebrate() {
+    setState(() => _celebrateKey++);
+    _spawnBurst(const ['✨', '🌟', '🎉', '⭐'], count: 6);
+  }
+
+  void _spawnBurst(List<String> emojis, {required int count}) {
+    final id = _burstSeq++;
+    final items = List.generate(count, (i) {
+      return _BurstItem(
+        emoji: emojis[i % emojis.length],
+        dx: (i - (count - 1) / 2) * 16.0,
+        delayMs: i * 55,
+      );
+    });
+    setState(() => _bursts.add(_Burst(id: id, items: items)));
+    Future.delayed(const Duration(milliseconds: 1300), () {
+      if (mounted) {
+        setState(() => _bursts.removeWhere((b) => b.id == id));
+      }
+    });
+  }
+
   String get _stageEmoji {
-    switch (avatarState.evolutionStage) {
+    switch (_a.evolutionStage) {
       case 1:
         return '🥚';
-      case 2:
-        return avatarState.creatureType.emoji;
-      case 3:
-        return avatarState.creatureType.emoji;
-      case 4:
-        return avatarState.creatureType.emoji;
       case 5:
-        return '✨${avatarState.creatureType.emoji}✨';
+        return '✨${_a.creatureType.emoji}✨';
       default:
-        return '🥚';
+        return _a.creatureType.emoji;
     }
   }
 
   double get _emojiSize {
-    switch (avatarState.evolutionStage) {
+    switch (_a.evolutionStage) {
       case 1:
-        return size * 0.3;
+        return widget.size * 0.3;
       case 2:
-        return size * 0.35;
+        return widget.size * 0.35;
       case 3:
-        return size * 0.45;
+        return widget.size * 0.45;
       case 4:
-        return size * 0.55;
+        return widget.size * 0.55;
       case 5:
-        return size * 0.6;
+        return widget.size * 0.6;
       default:
-        return size * 0.3;
+        return widget.size * 0.3;
     }
   }
 
   Color get _glowColor {
-    if (avatarState.moodScore >= GameConstants.moodHappyThreshold) {
+    if (_a.moodScore >= GameConstants.moodHappyThreshold) {
       return AppColors.moodHappy;
     }
-    if (avatarState.moodScore >= GameConstants.moodNeutralThreshold) {
+    if (_a.moodScore >= GameConstants.moodNeutralThreshold) {
       return AppColors.moodNeutral;
     }
-    if (avatarState.moodScore >= GameConstants.moodSadThreshold) {
-      return AppColors.moodSad;
-    }
-    return AppColors.moodSick;
+    return AppColors.moodSad;
   }
 
-  /// Friendly one-liner the avatar "says", driven by mood (and egg stage).
+  /// Warm one-liner the creature "says". Always positive — never guilt.
   String get _moodNote {
-    // Before the egg hatches, the creature can't "talk" much.
-    if (avatarState.evolutionStage == 1) {
-      return 'Keep me warm! 🥚';
-    }
-    final mood = avatarState.moodScore;
-    if (mood >= GameConstants.moodHappyThreshold) {
-      return "WOW! I'm happy today!";
-    }
-    if (mood >= GameConstants.moodNeutralThreshold) {
-      return 'Feeling good.';
-    }
-    if (mood >= GameConstants.moodSadThreshold) {
-      return 'I feel a bit sad…';
-    }
-    return "I'm tired today…";
+    if (_a.evolutionStage == 1) return 'Keep me warm! 🥚';
+    final mood = _a.moodScore;
+    if (mood >= GameConstants.moodHappyThreshold) return 'WOW! So happy! 💛';
+    if (mood >= GameConstants.moodNeutralThreshold) return 'Feeling good!';
+    return "Let's play! 💛";
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget avatar = Container(
+    final size = widget.size;
+
+    final circle = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: avatarState.creatureType.color.withAlpha(30),
+        color: _a.creatureType.color.withAlpha(30),
         border: Border.all(color: _glowColor.withAlpha(100), width: 3),
         boxShadow: [
           BoxShadow(
@@ -117,14 +164,11 @@ class AvatarDisplay extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            _stageEmoji,
-            style: TextStyle(fontSize: _emojiSize),
-          ),
-          if (avatarState.evolutionStage > 1) ...[
+          Text(_stageEmoji, style: TextStyle(fontSize: _emojiSize)),
+          if (_a.evolutionStage > 1) ...[
             const SizedBox(height: 4),
             Text(
-              avatarState.moodLabel,
+              _a.moodLabel,
               style: TextStyle(
                 fontSize: size * 0.07,
                 color: _glowColor,
@@ -136,42 +180,128 @@ class AvatarDisplay extends StatelessWidget {
       ),
     );
 
-    // Add animation based on mood
-    if (avatarState.moodScore >= GameConstants.moodHappyThreshold) {
-      avatar = avatar
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .scaleXY(end: 1.05, duration: 1500.ms)
-          .then()
-          .scaleXY(end: 1.0, duration: 1500.ms);
-    } else if (avatarState.moodScore < GameConstants.moodSadThreshold) {
-      avatar = avatar
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .moveY(begin: 0, end: 3, duration: 2000.ms);
+    // Small / header instances stay static and non-interactive.
+    if (!widget.showMoodNote || size < 120) {
+      return circle;
     }
 
-    // Skip the chat bubble on small instances (used in nav/headers).
-    if (!showMoodNote || size < 120) {
-      return avatar;
+    // Layer the living animations on the circle.
+    Widget creature = circle
+        // Idle breathing + gentle bob (continuous, reversing).
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .scaleXY(begin: 1, end: 1.04, duration: 2200.ms, curve: Curves.easeInOut)
+        .moveY(begin: 0, end: -4, duration: 2600.ms, curve: Curves.easeInOut);
+
+    // Occasional blink/squash on its own slow loop.
+    creature = creature
+        .animate(onPlay: (c) => c.repeat())
+        .scaleY(begin: 1, end: 0.9, duration: 110.ms, curve: Curves.easeOut)
+        .then()
+        .scaleY(begin: 0.9, end: 1, duration: 110.ms)
+        .then(delay: 3400.ms);
+
+    // One-shot tap reaction (only after the first tap so nothing fires on load).
+    if (_tapKey > 0) {
+      creature = creature
+          .animate(key: ValueKey('tap_$_tapKey'))
+          .scaleXY(begin: 1, end: 1.16, duration: 130.ms, curve: Curves.easeOut)
+          .then()
+          .scaleXY(begin: 1.16, end: 1, duration: 220.ms, curve: Curves.elasticOut);
     }
+
+    // One-shot celebration jump.
+    if (_celebrateKey > 0) {
+      creature = creature
+          .animate(key: ValueKey('celebrate_$_celebrateKey'))
+          .moveY(begin: 0, end: -22, duration: 260.ms, curve: Curves.easeOut)
+          .then()
+          .moveY(begin: -22, end: 0, duration: 430.ms, curve: Curves.bounceOut);
+    }
+
+    final interactive = GestureDetector(
+      onTap: _onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            creature,
+            for (final burst in _bursts)
+              for (var i = 0; i < burst.items.length; i++)
+                _BurstParticle(
+                  key: ValueKey('burst_${burst.id}_$i'),
+                  item: burst.items[i],
+                  fontSize: size * 0.13,
+                ),
+          ],
+        ),
+      ),
+    );
 
     final hasMessage =
-        messageOverride != null && messageOverride!.trim().isNotEmpty;
+        widget.messageOverride != null &&
+            widget.messageOverride!.trim().isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (hasMessage)
           _ParentMessageBubble(
-            text: messageOverride!,
-            fromName: messageFromName ?? 'Parent',
-            onTap: onMessageTap,
+            text: widget.messageOverride!,
+            fromName: widget.messageFromName ?? 'Parent',
+            onTap: widget.onMessageTap,
           )
         else
-          _MoodChatBubble(text: _moodNote, mood: avatarState.moodScore),
+          _MoodChatBubble(text: _moodNote, mood: _a.moodScore),
         const SizedBox(height: 8),
-        avatar,
+        interactive,
       ],
     );
+  }
+}
+
+class _Burst {
+  final int id;
+  final List<_BurstItem> items;
+  _Burst({required this.id, required this.items});
+}
+
+class _BurstItem {
+  final String emoji;
+  final double dx;
+  final int delayMs;
+  _BurstItem({required this.emoji, required this.dx, required this.delayMs});
+}
+
+class _BurstParticle extends StatelessWidget {
+  final _BurstItem item;
+  final double fontSize;
+
+  const _BurstParticle({
+    super.key,
+    required this.item,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(item.emoji, style: TextStyle(fontSize: fontSize))
+        .animate()
+        .moveY(
+          begin: 0,
+          end: -90,
+          duration: 950.ms,
+          delay: item.delayMs.ms,
+          curve: Curves.easeOut,
+        )
+        .moveX(begin: 0, end: item.dx, duration: 950.ms, delay: item.delayMs.ms)
+        .scaleXY(begin: 0.6, end: 1.2, duration: 300.ms, delay: item.delayMs.ms)
+        .fadeIn(duration: 120.ms, delay: item.delayMs.ms)
+        .then(delay: 350.ms)
+        .fadeOut(duration: 380.ms);
   }
 }
 
@@ -255,38 +385,24 @@ class _MoodChatBubble extends StatelessWidget {
 
   const _MoodChatBubble({required this.text, required this.mood});
 
-  Color get _bg {
-    if (mood >= GameConstants.moodHappyThreshold) {
-      return AppColors.moodHappy.withAlpha(40);
-    }
-    if (mood >= GameConstants.moodNeutralThreshold) {
-      return AppColors.moodNeutral.withAlpha(40);
-    }
-    if (mood >= GameConstants.moodSadThreshold) {
-      return AppColors.moodSad.withAlpha(40);
-    }
-    return AppColors.moodSick.withAlpha(40);
-  }
-
   Color get _border {
     if (mood >= GameConstants.moodHappyThreshold) return AppColors.moodHappy;
     if (mood >= GameConstants.moodNeutralThreshold) {
       return AppColors.moodNeutral;
     }
-    if (mood >= GameConstants.moodSadThreshold) return AppColors.moodSad;
-    return AppColors.moodSick;
+    return AppColors.moodSad;
   }
 
   @override
   Widget build(BuildContext context) {
+    final bg = _border.withAlpha(40);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: _bg,
+            color: bg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: _border.withAlpha(120)),
           ),
@@ -295,10 +411,9 @@ class _MoodChatBubble extends StatelessWidget {
             style: AppTextStyles.bodyBold.copyWith(color: _border),
           ),
         ),
-        // Tiny tail triangle pointing down to the avatar.
         CustomPaint(
           size: const Size(14, 8),
-          painter: _BubbleTailPainter(color: _bg, border: _border),
+          painter: _BubbleTailPainter(color: bg, border: _border),
         ),
       ],
     );

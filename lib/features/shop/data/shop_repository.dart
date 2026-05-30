@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/firestore_paths.dart';
+import '../../../core/constants/game_constants.dart';
 import '../domain/shop_item_model.dart';
 import '../domain/inventory_model.dart';
 import '../domain/transaction_model.dart';
@@ -122,6 +123,44 @@ class ShopRepository {
         'avatarState': updatedAvatar.toMap(),
       });
     });
+  }
+
+  /// Give the creature a FREE daily treat. Gated to once per calendar day via
+  /// `avatarState.lastFedAt`. Returns true if the treat was eaten now, false
+  /// if it was already fed today. Always positive — never penalizes.
+  Future<bool> giveDailyTreat({
+    required String familyId,
+    required String memberId,
+  }) async {
+    final memberRef = _firestore
+        .collection(FirestorePaths.members(familyId))
+        .doc(memberId);
+
+    bool eaten = false;
+    await _firestore.runTransaction((txn) async {
+      final snap = await txn.get(memberRef);
+      final member = MemberModel.fromMap(snap.id, snap.data()!);
+
+      final last = member.avatarState.lastFedAt;
+      final now = DateTime.now();
+      final alreadyFedToday = last != null &&
+          last.year == now.year &&
+          last.month == now.month &&
+          last.day == now.day;
+      if (alreadyFedToday) {
+        eaten = false;
+        return;
+      }
+
+      final updatedAvatar = EvolutionCalculator.applyMoodChange(
+        member.avatarState,
+        GameConstants.moodFoodItem,
+      ).copyWith(lastFedAt: now);
+
+      txn.update(memberRef, {'avatarState': updatedAvatar.toMap()});
+      eaten = true;
+    });
+    return eaten;
   }
 
   /// Equip/unequip an accessory on the avatar.

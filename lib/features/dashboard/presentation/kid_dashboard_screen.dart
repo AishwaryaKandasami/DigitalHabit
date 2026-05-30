@@ -7,6 +7,7 @@ import '../../../core/widgets/coin_badge.dart';
 import '../../../core/widgets/xp_bar.dart';
 import '../../family/providers/family_providers.dart';
 import '../../avatar/presentation/widgets/avatar_display.dart';
+import '../../avatar/domain/evolution_calculator.dart';
 import '../../planner/domain/plan_model.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../tasks/providers/task_providers.dart';
@@ -14,11 +15,24 @@ import '../../tasks/domain/reward_calculator.dart';
 import '../../tasks/domain/task_log_model.dart';
 import '../../tasks/presentation/widgets/parent_feedback_chip.dart';
 import '../../messages/providers/message_providers.dart';
+import '../../shop/providers/shop_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import 'widgets/nudge_banner.dart';
 
-class KidDashboardScreen extends ConsumerWidget {
+class KidDashboardScreen extends ConsumerStatefulWidget {
   const KidDashboardScreen({super.key});
+
+  @override
+  ConsumerState<KidDashboardScreen> createState() =>
+      _KidDashboardScreenState();
+}
+
+class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
+  /// Local counter the AvatarDisplay watches; bumping it plays a celebration.
+  int _celebrateSignal = 0;
+
+  /// Throttles the pet-mood Firestore write (the animation always plays).
+  DateTime? _lastPetWrite;
 
   String _todayDayName() {
     final weekday = DateTime.now().weekday;
@@ -31,13 +45,10 @@ class KidDashboardScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final member = ref.watch(currentMemberProvider);
     final planAsync = ref.watch(currentPlanProvider);
     final logsAsync = ref.watch(todayLogsProvider);
-
-    // Apply mood decay retroactively on dashboard load
-    ref.watch(applyMoodDecayProvider);
 
     if (member == null) {
       return const Scaffold(
@@ -104,17 +115,18 @@ class KidDashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
 
-              // Avatar (speech bubble switches to parent's latest unread
-              // message when one exists; mood note otherwise).
+              // Avatar — tap to pet, celebrates on task done / treat.
               Center(
                 child: AvatarDisplay(
                   avatarState: avatar,
                   size: 160,
+                  celebrateSignal: _celebrateSignal,
+                  onTapPet: _petCreature,
                   messageOverride: latestMessage?.text,
                   messageFromName: latestMessage?.fromName,
                   onMessageTap: latestMessage == null
                       ? null
-                      : () => _dismissMessages(context, ref),
+                      : () => _dismissMessages(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -124,14 +136,21 @@ class KidDashboardScreen extends ConsumerWidget {
                   style: AppTextStyles.bodyBold,
                 ),
               ),
+              const SizedBox(height: 8),
+              Center(
+                child: OutlinedButton.icon(
+                  onPressed: _giveTreat,
+                  icon: const Text('🍎', style: TextStyle(fontSize: 16)),
+                  label: const Text('Give a treat'),
+                ),
+              ),
               const SizedBox(height: 12),
 
               // Combined "new from parent" banner (task feedback + messages).
               if (unreadLogs.isNotEmpty || unreadMessageCount > 0) ...[
                 _FeedbackBanner(
                   count: unreadLogs.length + unreadMessageCount,
-                  onTap: () =>
-                      _openFeedback(context, ref, unreadLogs),
+                  onTap: () => _openFeedback(unreadLogs),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -195,10 +214,10 @@ class KidDashboardScreen extends ConsumerWidget {
                             const SizedBox(height: 4),
                             Text(
                               totalCount == 0
-                                  ? 'No tasks planned for today.'
+                                  ? 'Free day! 😎'
                                   : doneCount == totalCount
-                                      ? 'All done! Your creature is happy!'
-                                      : 'Complete tasks to earn coins!',
+                                      ? 'All done! 🎉'
+                                      : 'Keep going! 🌟',
                               style: AppTextStyles.caption,
                             ),
                           ],
@@ -318,8 +337,7 @@ class KidDashboardScreen extends ConsumerWidget {
                           ? const Icon(Icons.check_circle,
                               color: AppColors.accentGreen, size: 24)
                           : _QuickDoneButton(
-                              onPressed: () => _completeTask(
-                                  context, ref, plan!, task),
+                              onPressed: () => _completeTask(plan!, task),
                             ),
                     ),
                   );
@@ -333,11 +351,7 @@ class KidDashboardScreen extends ConsumerWidget {
 
   /// Mark all currently-unread feedback logs + parent messages as seen and
   /// jump to the Today's Tasks screen so the kid actually sees the comments.
-  Future<void> _openFeedback(
-    BuildContext context,
-    WidgetRef ref,
-    List<TaskLogModel> unread,
-  ) async {
+  Future<void> _openFeedback(List<TaskLogModel> unread) async {
     final appUser = ref.read(appUserProvider).value;
     if (appUser?.familyId == null) return;
     try {
@@ -360,13 +374,13 @@ class KidDashboardScreen extends ConsumerWidget {
     } catch (_) {
       // Marking-seen is a nice-to-have; don't block navigation on failure.
     }
-    if (!context.mounted) return;
+    if (!mounted) return;
     context.push('/kid/tasks');
   }
 
   /// Tap on the avatar's parent-message bubble: clear all unread messages
   /// so the bubble reverts to the mood note. Stays on dashboard.
-  Future<void> _dismissMessages(BuildContext context, WidgetRef ref) async {
+  Future<void> _dismissMessages() async {
     final appUser = ref.read(appUserProvider).value;
     if (appUser?.familyId == null) return;
     final msgs = ref.read(myMessagesProvider).value ?? const [];
@@ -383,12 +397,73 @@ class KidDashboardScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _completeTask(
-    BuildContext context,
-    WidgetRef ref,
-    PlanModel plan,
-    dynamic task,
-  ) async {
+  /// Pet the creature: always-free joy. The heart burst plays in the widget;
+  /// here we give a tiny mood boost, throttled to ~once per 20s.
+  Future<void> _petCreature() async {
+    final now = DateTime.now();
+    if (_lastPetWrite != null &&
+        now.difference(_lastPetWrite!).inSeconds < 20) {
+      return;
+    }
+    _lastPetWrite = now;
+    final appUser = ref.read(appUserProvider).value;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null ||
+        appUser?.memberId == null ||
+        member == null) {
+      return;
+    }
+    try {
+      final updated =
+          EvolutionCalculator.applyMoodChange(member.avatarState, 1);
+      await ref.read(familyRepositoryProvider).updateMember(
+            appUser!.familyId!,
+            appUser.memberId!,
+            {'avatarState': updated.toMap()},
+          );
+    } catch (_) {
+      // best-effort; don't surface pet-write errors
+    }
+  }
+
+  /// Give the free daily treat: mood boost + celebration, or a gentle note
+  /// if already fed today. Never penalizes.
+  Future<void> _giveTreat() async {
+    final appUser = ref.read(appUserProvider).value;
+    if (appUser?.familyId == null || appUser?.memberId == null) return;
+    try {
+      final eaten = await ref.read(shopRepositoryProvider).giveDailyTreat(
+            familyId: appUser!.familyId!,
+            memberId: appUser.memberId!,
+          );
+      if (!mounted) return;
+      if (eaten) {
+        setState(() => _celebrateSignal++);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Yum! 🍎 Your creature feels great!'),
+            backgroundColor: AppColors.accentGreen,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Already had a treat today! 💤'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _completeTask(PlanModel plan, dynamic task) async {
     final appUser = ref.read(appUserProvider).value;
     if (appUser == null) return;
 
@@ -411,12 +486,15 @@ class KidDashboardScreen extends ConsumerWidget {
 
       ref.invalidate(todayLogsProvider);
 
-      if (context.mounted) {
+      // Celebrate inline on the dashboard (happy jump + sparkles).
+      if (mounted) setState(() => _celebrateSignal++);
+
+      if (mounted) {
         final reward =
             RewardCalculator.forTaskCompletion(isHealthy: task.isHealthy);
         final msg = result.leveledUp
-            ? '${task.title} done! Your creature evolved! +${reward.coins} coins, +${reward.xp} XP'
-            : '${task.title} done! +${reward.coins} coins, +${reward.xp} XP';
+            ? 'Yay! ${task.title} done — your creature evolved! +${reward.coins} 🪙'
+            : 'Nice! ${task.title} done +${reward.coins} 🪙';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
@@ -428,7 +506,7 @@ class KidDashboardScreen extends ConsumerWidget {
         );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
