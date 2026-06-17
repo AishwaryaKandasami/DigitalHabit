@@ -371,7 +371,8 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
                     return _DayTaskList(
                       dayName: dayName,
                       tasks: tasks,
-                      isEditable: isEditable,
+                      // Per-day: today & future stay editable after approval.
+                      isEditable: plan.isDayEditable(dayName),
                       status: plan.status,
                       onOpenDay: () => context.push(
                         '/kid/planner/day/$dayName',
@@ -545,6 +546,14 @@ class _StatusBanner extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Tap any day or task to change it, then tap Submit at the top.',
+              style: AppTextStyles.caption,
+            ),
+          ],
+          if (status == PlanStatus.approved) ...[
+            const SizedBox(height: 4),
+            Text(
+              'You can still add or change tasks for today and upcoming days — '
+              'changes save automatically.',
               style: AppTextStyles.caption,
             ),
           ],

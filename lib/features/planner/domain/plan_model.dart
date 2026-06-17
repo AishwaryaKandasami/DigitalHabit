@@ -71,6 +71,29 @@ class PlanModel {
   bool get isEditable =>
       status == PlanStatus.draft || status == PlanStatus.revisionRequested;
 
+  /// Whether a specific day can be edited right now.
+  /// - draft / revisionRequested: every day is editable.
+  /// - approved: today and future days stay editable; past days lock so
+  ///   history can't be rewritten. Edits auto-save and keep the approval.
+  /// - pendingApproval: locked while waiting for the parent.
+  bool isDayEditable(String dayName) {
+    if (status == PlanStatus.draft ||
+        status == PlanStatus.revisionRequested) {
+      return true;
+    }
+    if (status == PlanStatus.approved) {
+      final idx = dayNames.indexOf(dayName);
+      if (idx < 0) return false;
+      final monday = DateTime.parse(weekStart);
+      final dayDate = DateTime(monday.year, monday.month, monday.day)
+          .add(Duration(days: idx));
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      return !dayDate.isBefore(today);
+    }
+    return false; // pendingApproval
+  }
+
   factory PlanModel.empty({
     required String memberId,
     required String weekStart,

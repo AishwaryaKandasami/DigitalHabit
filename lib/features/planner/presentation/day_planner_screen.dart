@@ -6,6 +6,7 @@ import '../../../core/utils/id_generator.dart';
 import '../domain/plan_model.dart';
 import '../domain/task_model.dart';
 import '../providers/planner_providers.dart';
+import '../../auth/providers/auth_providers.dart';
 import 'add_task_sheet.dart';
 
 class DayPlannerScreen extends ConsumerWidget {
@@ -36,7 +37,8 @@ class DayPlannerScreen extends ConsumerWidget {
 
     final tasks = List<TaskModel>.from(draft.tasksForDay(dayName))
       ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    final isEditable = draft.isEditable;
+    // Per-day: today & future stay editable even after approval.
+    final isEditable = draft.isDayEditable(dayName);
 
     return Scaffold(
       appBar: AppBar(
@@ -125,7 +127,7 @@ class DayPlannerScreen extends ConsumerWidget {
       ..removeWhere((t) => t.taskId == task.taskId);
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = dayTasks;
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   /// Called from the hourly grid after a long-press / close-icon delete.
@@ -151,6 +153,21 @@ class DayPlannerScreen extends ConsumerWidget {
   /// Identifies a "same" task across days by title + start time.
   bool _matches(TaskModel a, TaskModel b) =>
       a.title == b.title && a.hour == b.hour && a.minute == b.minute;
+
+  /// Update the in-memory draft AND, for an already-approved plan, persist the
+  /// change immediately so edits to today/future days stick without needing
+  /// re-approval. Draft/revision plans still save only on Submit.
+  void _commitDraft(WidgetRef ref, PlanModel newPlan) {
+    ref.read(draftPlanProvider.notifier).set(newPlan);
+    if (newPlan.status == PlanStatus.approved && newPlan.id.isNotEmpty) {
+      final appUser = ref.read(appUserProvider).value;
+      final familyId = appUser?.familyId;
+      if (familyId != null) {
+        // Fire-and-forget; last-write-wins is fine for a single editor.
+        ref.read(planRepositoryProvider).savePlan(familyId, newPlan);
+      }
+    }
+  }
 
   /// Show a snackbar after an add/edit/delete with TWO explicit choices:
   /// keep the change local to this day, or apply it to every day in the
@@ -207,9 +224,7 @@ class DayPlannerScreen extends ConsumerWidget {
                             : SnackBarAction(
                                 label: 'Undo',
                                 onPressed: () {
-                                  ref
-                                      .read(draftPlanProvider.notifier)
-                                      .set(snapshot);
+                                  _commitDraft(ref, snapshot);
                                   messenger.removeCurrentSnackBar();
                                   messenger.showSnackBar(
                                     const SnackBar(
@@ -247,6 +262,7 @@ class DayPlannerScreen extends ConsumerWidget {
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     for (final d in PlanModel.dayNames) {
       if (d == dayName) continue;
+      if (!draft.isDayEditable(d)) continue; // don't touch locked past days
       final tasks = List<TaskModel>.from(draft.tasksForDay(d));
       if (tasks.any((t) => _matches(t, added))) continue;
       tasks.add(TaskModel(
@@ -262,7 +278,7 @@ class DayPlannerScreen extends ConsumerWidget {
       ));
       newDays[d] = tasks;
     }
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   /// On every other day, find the task that matched the ORIGINAL (title, time)
@@ -278,6 +294,7 @@ class DayPlannerScreen extends ConsumerWidget {
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     for (final d in PlanModel.dayNames) {
       if (d == dayName) continue;
+      if (!draft.isDayEditable(d)) continue; // don't touch locked past days
       final tasks = List<TaskModel>.from(draft.tasksForDay(d));
       final idx = tasks.indexWhere((t) => _matches(t, original));
       if (idx >= 0) {
@@ -308,7 +325,7 @@ class DayPlannerScreen extends ConsumerWidget {
       }
       newDays[d] = tasks;
     }
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   /// Remove tasks that match (title, time) on every other day.
@@ -318,11 +335,12 @@ class DayPlannerScreen extends ConsumerWidget {
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     for (final d in PlanModel.dayNames) {
       if (d == dayName) continue;
+      if (!draft.isDayEditable(d)) continue; // don't touch locked past days
       final tasks = List<TaskModel>.from(draft.tasksForDay(d))
         ..removeWhere((t) => _matches(t, removed));
       newDays[d] = tasks;
     }
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   void _updateDraftWithTask(WidgetRef ref, TaskModel task) {
@@ -331,7 +349,7 @@ class DayPlannerScreen extends ConsumerWidget {
     final dayTasks = List<TaskModel>.from(draft.tasksForDay(dayName))..add(task);
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = dayTasks;
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   void _replaceDraftTask(WidgetRef ref, String taskId, TaskModel updated) {
@@ -342,7 +360,7 @@ class DayPlannerScreen extends ConsumerWidget {
       ..add(updated);
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = dayTasks;
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
   }
 
   Future<void> _copyFromAnotherDay(
@@ -420,7 +438,7 @@ class DayPlannerScreen extends ConsumerWidget {
 
     final newDays = Map<String, List<TaskModel>>.from(draft.days);
     newDays[dayName] = merged;
-    ref.read(draftPlanProvider.notifier).set(draft.copyWith(days: newDays));
+    _commitDraft(ref, draft.copyWith(days: newDays));
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
