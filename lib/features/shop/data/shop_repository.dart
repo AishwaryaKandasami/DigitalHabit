@@ -181,6 +181,14 @@ class ShopRepository {
       if (accessories.contains(itemId)) {
         accessories.remove(itemId);
       } else {
+        // Only one background at a time — strip any other equipped background.
+        final item = ShopItemModel.byId(itemId);
+        if (item != null && item.type == ShopItemType.background) {
+          accessories.removeWhere((id) {
+            final other = ShopItemModel.byId(id);
+            return other != null && other.type == ShopItemType.background;
+          });
+        }
         accessories.add(itemId);
       }
 

@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/constants/game_constants.dart';
+import '../../../shop/domain/shop_item_model.dart';
 import '../../domain/avatar_state.dart';
 
 /// A living, interactive creature display.
@@ -133,6 +134,29 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
     return AppColors.moodSad;
   }
 
+  /// Emojis of equipped accessories (hat, glasses, etc.), in equip order.
+  List<String> get _accessoryEmojis {
+    final out = <String>[];
+    for (final id in _a.accessories) {
+      final item = ShopItemModel.byId(id);
+      if (item != null && item.type == ShopItemType.accessory) {
+        out.add(item.emoji);
+      }
+    }
+    return out;
+  }
+
+  /// Emoji of the equipped background (only one shown), or null.
+  String? get _backgroundEmoji {
+    for (final id in _a.accessories) {
+      final item = ShopItemModel.byId(id);
+      if (item != null && item.type == ShopItemType.background) {
+        return item.emoji;
+      }
+    }
+    return null;
+  }
+
   /// Warm one-liner the creature "says". Always positive — never guilt.
   String get _moodNote {
     if (_a.evolutionStage == 1) return 'Keep me warm! 🥚';
@@ -145,6 +169,9 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
   @override
   Widget build(BuildContext context) {
     final size = widget.size;
+
+    final bgEmoji = _backgroundEmoji;
+    final accessoryEmojis = _accessoryEmojis;
 
     final circle = Container(
       width: size,
@@ -161,21 +188,53 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Text(_stageEmoji, style: TextStyle(fontSize: _emojiSize)),
-          if (_a.evolutionStage > 1) ...[
-            const SizedBox(height: 4),
-            Text(
-              _a.moodLabel,
-              style: TextStyle(
-                fontSize: size * 0.07,
-                color: _glowColor,
-                fontWeight: FontWeight.bold,
+          // Background scene (faint), kept inside the circle.
+          if (bgEmoji != null)
+            ClipOval(
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: Center(
+                  child: Opacity(
+                    opacity: 0.18,
+                    child: Text(bgEmoji, style: TextStyle(fontSize: size * 0.72)),
+                  ),
+                ),
               ),
             ),
-          ],
+          // Creature + mood label.
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_stageEmoji, style: TextStyle(fontSize: _emojiSize)),
+              if (_a.evolutionStage > 1) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _a.moodLabel,
+                  style: TextStyle(
+                    fontSize: size * 0.07,
+                    color: _glowColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          // Equipped accessories worn near the top of the creature.
+          if (accessoryEmojis.isNotEmpty)
+            Align(
+              alignment: const Alignment(0, -0.75),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final e in accessoryEmojis)
+                    Text(e, style: TextStyle(fontSize: size * 0.18)),
+                ],
+              ),
+            ),
         ],
       ),
     );

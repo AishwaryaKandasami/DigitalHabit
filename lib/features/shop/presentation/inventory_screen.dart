@@ -84,7 +84,8 @@ class InventoryScreen extends ConsumerWidget {
                         onUse: inv.item.isConsumable
                             ? () => _useItem(context, ref, inv.item)
                             : null,
-                        onEquip: inv.item.type == ShopItemType.accessory
+                        onEquip: (inv.item.type == ShopItemType.accessory ||
+                                inv.item.type == ShopItemType.background)
                             ? () =>
                                 _toggleAccessory(context, ref, inv.item.id)
                             : null,

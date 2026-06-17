@@ -37,6 +37,16 @@ class ShopItemModel {
 
   bool get isConsumable => type == ShopItemType.food || type == ShopItemType.potion;
 
+  /// Resolve an equipped/owned itemId to its catalog entry (emoji + type).
+  /// The shop is always seeded from [defaultItems], so this static lookup is
+  /// enough — no Firestore read needed to render cosmetics.
+  static ShopItemModel? byId(String id) {
+    for (final i in defaultItems) {
+      if (i.id == id) return i;
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() => {
         'name': name,
         'description': description,

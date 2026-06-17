@@ -202,6 +202,10 @@ class ShopScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text('Use it from your inventory!',
                     style: AppTextStyles.caption),
+              ] else ...[
+                const SizedBox(height: 8),
+                Text('Equip it from your backpack 🎒!',
+                    style: AppTextStyles.caption),
               ],
             ],
           ),
