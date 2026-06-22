@@ -212,8 +212,10 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     ref.read(selectedWeekStartProvider.notifier).set(iso);
   }
 
-  bool _needsSync(PlanModel? existing, PlanModel? draft) {
+  bool _needsSync(PlanModel? existing, PlanModel? draft, String? memberId) {
     if (draft == null) return true;
+    // Draft belongs to a different child → reset and re-sync for the active one.
+    if (memberId != null && draft.memberId != memberId) return true;
     // Different week → re-sync
     if (existing != null && existing.weekStart != draft.weekStart) return true;
     if (existing == null) {
@@ -234,16 +236,16 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     final planAsync = ref.watch(currentPlanProvider);
     final draft = ref.watch(draftPlanProvider);
     final weekStart = ref.watch(selectedWeekStartProvider);
+    final memberId = ref.watch(currentMemberProvider)?.id;
 
     return planAsync.when(
       loading: () =>
           const Scaffold(body: LoadingWidget(message: 'Loading plan...')),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (existingPlan) {
-        // Re-sync draft whenever Firestore state diverges — ensures parent
-        // revision notes & approvals reach the kid, and week changes reset
-        // the draft.
-        if (_needsSync(existingPlan, draft)) {
+        // Re-sync the draft whenever it diverges from Firestore — week change,
+        // a switch to a different child, or an updated plan doc.
+        if (_needsSync(existingPlan, draft, memberId)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _syncDraftFromExisting(existingPlan);
           });
