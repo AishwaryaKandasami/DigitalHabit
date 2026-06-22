@@ -64,28 +64,29 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
           _passwordController.text,
         );
       } on FirebaseAuthException catch (e) {
-        if (e.code == 'email-already-in-use') {
-          // Account exists — sign in and recover/route instead of duplicating.
-          try {
-            user = await authRepo.signIn(
-              _emailController.text.trim(),
-              _passwordController.text,
-            );
-            final existing = await authRepo.getUserProfile(user.uid) ??
-                await authRepo.recoverUserProfile(user);
-            if (existing != null && existing.familyId != null) {
-              await _refreshAppUser();
-              if (mounted) context.go('/kid');
-              return;
-            }
-            // Nothing to recover — fall through to create the family.
-          } catch (_) {
-            setState(() => _error =
-                'This email is already registered. Try logging in with the correct password.');
-            return;
-          }
-        } else {
-          rethrow;
+        if (e.code != 'email-already-in-use') rethrow;
+        // The account already exists — sign in to finish (or repair) setup.
+        // This recovers the common case where the Firestore family was wiped
+        // but the auth user still exists.
+        try {
+          user = await authRepo.signIn(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+        } on FirebaseAuthException {
+          setState(() => _error =
+              'That email is already registered. Enter its existing password '
+              'here to finish setup, or use "Log in".');
+          return;
+        }
+        // Already fully set up → go straight in. Otherwise fall through and
+        // create the family for this signed-in account.
+        final existing = await authRepo.getUserProfile(user.uid) ??
+            await authRepo.recoverUserProfile(user);
+        if (existing != null && existing.familyId != null) {
+          await _refreshAppUser();
+          if (mounted) context.go('/kid');
+          return;
         }
       }
 

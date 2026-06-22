@@ -58,9 +58,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
       if (appUser == null || appUser.familyId == null) {
-        // No family found — genuinely needs to sign up.
+        // Signed in but no family yet (e.g. data was reset). Send them to the
+        // setup screen, which finishes setup for this existing account.
         setState(() => _error =
-            'Account exists but we could not find your family. Please sign up to complete setup.');
+            'This account has no family set up yet — finishing setup…');
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (mounted) context.go('/signup');
         return;
       }
 
