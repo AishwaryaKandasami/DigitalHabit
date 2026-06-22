@@ -143,9 +143,11 @@ class InventoryScreen extends ConsumerWidget {
 
     try {
       final appUser = ref.read(appUserProvider).value!;
+      final member = ref.read(currentMemberProvider);
+      if (member == null) return;
       await ref.read(shopRepositoryProvider).useItem(
             familyId: appUser.familyId!,
-            memberId: appUser.memberId!,
+            memberId: member.id,
             item: item,
           );
 
@@ -176,9 +178,11 @@ class InventoryScreen extends ConsumerWidget {
   ) async {
     try {
       final appUser = ref.read(appUserProvider).value!;
+      final member = ref.read(currentMemberProvider);
+      if (member == null) return;
       await ref.read(shopRepositoryProvider).toggleAccessory(
             familyId: appUser.familyId!,
-            memberId: appUser.memberId!,
+            memberId: member.id,
             itemId: itemId,
           );
     } catch (e) {

@@ -50,3 +50,6 @@ app.*.map.json
 # Firebase (real config files with keys)
 google-services.json
 GoogleService-Info.plist
+
+# Stray SDK copy accidentally created by a tool
+/c/

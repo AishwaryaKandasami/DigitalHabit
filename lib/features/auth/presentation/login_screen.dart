@@ -5,7 +5,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../providers/auth_providers.dart';
-import '../../family/providers/family_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -58,30 +57,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
 
       if (!mounted) return;
-      if (appUser == null) {
-        // No family found anywhere — genuinely needs to sign up.
+      if (appUser == null || appUser.familyId == null) {
+        // No family found — genuinely needs to sign up.
         setState(() => _error =
             'Account exists but we could not find your family. Please sign up to complete setup.');
         return;
       }
 
-      if (appUser.isParent) {
-        context.go('/parent');
-      } else {
-        // First-time kid (no creature name yet) → choose-avatar onboarding.
-        final familyId = appUser.familyId;
-        final memberId = appUser.memberId;
-        var goTo = '/kid';
-        if (familyId != null && memberId != null) {
-          final familyRepo = ref.read(familyRepositoryProvider);
-          final member = await familyRepo.getMember(familyId, memberId);
-          if (member != null && member.avatarState.creatureName.isEmpty) {
-            goTo = '/choose-avatar';
-          }
-        }
-        if (!mounted) return;
-        context.go(goTo);
-      }
+      // Single login → straight into the app. The active profile is the
+      // family's child (auto-selected; the picker handles multiple kids).
+      context.go('/kid');
     } catch (e) {
       setState(() => _error = _friendlyError(e.toString()));
     } finally {

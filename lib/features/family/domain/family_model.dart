@@ -44,26 +44,38 @@ class FamilyModel {
 }
 
 class FamilySettings {
-  final bool requireParentVerification;
   final String weekStartsOn;
   final int maxScreenTimeMinutes;
 
+  /// 4-digit PIN gating the grown-up area. Null until set during setup.
+  final String? grownupPin;
+
   const FamilySettings({
-    this.requireParentVerification = true,
     this.weekStartsOn = 'monday',
     this.maxScreenTimeMinutes = 120,
+    this.grownupPin,
   });
 
   Map<String, dynamic> toMap() => {
-        'requireParentVerification': requireParentVerification,
         'weekStartsOn': weekStartsOn,
         'maxScreenTimeMinutes': maxScreenTimeMinutes,
+        'grownupPin': grownupPin,
       };
 
   factory FamilySettings.fromMap(Map<String, dynamic> map) => FamilySettings(
-        requireParentVerification:
-            map['requireParentVerification'] as bool? ?? true,
         weekStartsOn: map['weekStartsOn'] as String? ?? 'monday',
         maxScreenTimeMinutes: map['maxScreenTimeMinutes'] as int? ?? 120,
+        grownupPin: map['grownupPin'] as String?,
+      );
+
+  FamilySettings copyWith({
+    String? weekStartsOn,
+    int? maxScreenTimeMinutes,
+    String? grownupPin,
+  }) =>
+      FamilySettings(
+        weekStartsOn: weekStartsOn ?? this.weekStartsOn,
+        maxScreenTimeMinutes: maxScreenTimeMinutes ?? this.maxScreenTimeMinutes,
+        grownupPin: grownupPin ?? this.grownupPin,
       );
 }

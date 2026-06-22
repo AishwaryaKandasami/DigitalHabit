@@ -12,8 +12,6 @@ import '../../planner/domain/plan_model.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../tasks/providers/task_providers.dart';
 import '../../tasks/domain/reward_calculator.dart';
-import '../../tasks/domain/task_log_model.dart';
-import '../../tasks/presentation/widgets/parent_feedback_chip.dart';
 import '../../messages/providers/message_providers.dart';
 import '../../shop/providers/shop_providers.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -64,13 +62,6 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
         : [];
     final completedTaskIds =
         logsAsync.value?.map((l) => l.taskId).toSet() ?? {};
-    final logsByTaskId = <String, TaskLogModel>{
-      for (final l in (logsAsync.value ?? const <TaskLogModel>[]))
-        l.taskId: l,
-    };
-    final unreadLogs = (logsAsync.value ?? const <TaskLogModel>[])
-        .where((l) => l.hasUnreadFeedback)
-        .toList();
     final latestMessage = ref.watch(latestUnreadMessageProvider);
     final unreadMessageCount = ref.watch(unreadMessagesCountProvider);
     final doneCount =
@@ -110,7 +101,21 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                       ),
                     ],
                   ),
-                  CoinBadge(coins: member.wallet.coins),
+                  Row(
+                    children: [
+                      CoinBadge(coins: member.wallet.coins),
+                      IconButton(
+                        icon: const Icon(Icons.switch_account_outlined),
+                        tooltip: 'Switch profile',
+                        onPressed: () => context.push('/who'),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.lock_outline),
+                        tooltip: 'Grown-ups',
+                        onPressed: () => context.push('/grownups'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
@@ -146,11 +151,11 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Combined "new from parent" banner (task feedback + messages).
-              if (unreadLogs.isNotEmpty || unreadMessageCount > 0) ...[
+              // "New message from your grown-up" banner.
+              if (unreadMessageCount > 0) ...[
                 _FeedbackBanner(
-                  count: unreadLogs.length + unreadMessageCount,
-                  onTap: () => _openFeedback(unreadLogs),
+                  count: unreadMessageCount,
+                  onTap: _dismissMessages,
                 ),
                 const SizedBox(height: 16),
               ],
@@ -286,7 +291,6 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                 // Show up to 5 tasks inline
                 ...todayTasks.take(5).map((task) {
                   final isDone = completedTaskIds.contains(task.taskId);
-                  final log = logsByTaskId[task.taskId];
                   final timeStr =
                       '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
                   return Card(
@@ -295,7 +299,6 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                         ? AppColors.accentGreen.withAlpha(15)
                         : null,
                     child: ListTile(
-                      isThreeLine: log != null && log.verifiedByParent != null,
                       leading: Container(
                         width: 40,
                         height: 40,
@@ -321,18 +324,8 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                           color: isDone ? AppColors.textSecondary : null,
                         ),
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('$timeStr  •  ${task.duration}min',
-                              style: AppTextStyles.caption),
-                          if (log != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: ParentFeedbackChip(log: log),
-                            ),
-                        ],
-                      ),
+                      subtitle: Text('$timeStr  •  ${task.duration}min',
+                          style: AppTextStyles.caption),
                       trailing: isDone
                           ? const Icon(Icons.check_circle,
                               color: AppColors.accentGreen, size: 24)
@@ -351,33 +344,6 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
 
   /// Mark all currently-unread feedback logs + parent messages as seen and
   /// jump to the Today's Tasks screen so the kid actually sees the comments.
-  Future<void> _openFeedback(List<TaskLogModel> unread) async {
-    final appUser = ref.read(appUserProvider).value;
-    if (appUser?.familyId == null) return;
-    try {
-      if (unread.isNotEmpty) {
-        await ref.read(taskLogRepositoryProvider).markFeedbackSeen(
-              familyId: appUser!.familyId!,
-              logIds: unread.map((l) => l.id).toList(),
-            );
-      }
-      // Also mark unread parent messages as seen.
-      final msgs = ref.read(myMessagesProvider).value ?? const [];
-      final unreadMsgIds =
-          msgs.where((m) => !m.seenByChild).map((m) => m.id).toList();
-      if (unreadMsgIds.isNotEmpty) {
-        await ref.read(messageRepositoryProvider).markAllSeen(
-              familyId: appUser!.familyId!,
-              messageIds: unreadMsgIds,
-            );
-      }
-    } catch (_) {
-      // Marking-seen is a nice-to-have; don't block navigation on failure.
-    }
-    if (!mounted) return;
-    context.push('/kid/tasks');
-  }
-
   /// Tap on the avatar's parent-message bubble: clear all unread messages
   /// so the bubble reverts to the mood note. Stays on dashboard.
   Future<void> _dismissMessages() async {
@@ -408,9 +374,7 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
     _lastPetWrite = now;
     final appUser = ref.read(appUserProvider).value;
     final member = ref.read(currentMemberProvider);
-    if (appUser?.familyId == null ||
-        appUser?.memberId == null ||
-        member == null) {
+    if (appUser?.familyId == null || member == null) {
       return;
     }
     try {
@@ -418,7 +382,7 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
           EvolutionCalculator.applyMoodChange(member.avatarState, 1);
       await ref.read(familyRepositoryProvider).updateMember(
             appUser!.familyId!,
-            appUser.memberId!,
+            member.id,
             {'avatarState': updated.toMap()},
           );
     } catch (_) {
@@ -430,11 +394,12 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
   /// if already fed today. Never penalizes.
   Future<void> _giveTreat() async {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser?.familyId == null || appUser?.memberId == null) return;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null || member == null) return;
     try {
       final eaten = await ref.read(shopRepositoryProvider).giveDailyTreat(
             familyId: appUser!.familyId!,
-            memberId: appUser.memberId!,
+            memberId: member.id,
           );
       if (!mounted) return;
       if (eaten) {
@@ -465,13 +430,14 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
 
   Future<void> _completeTask(PlanModel plan, dynamic task) async {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser == null) return;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null || member == null) return;
 
     try {
       final repo = ref.read(taskLogRepositoryProvider);
       final result = await repo.completeTask(
-        familyId: appUser.familyId!,
-        memberId: appUser.memberId!,
+        familyId: appUser!.familyId!,
+        memberId: member.id,
         planId: plan.id,
         date: _todayDate(),
         task: task,
@@ -480,7 +446,7 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
       // Update streak
       await repo.updateStreak(
         familyId: appUser.familyId!,
-        memberId: appUser.memberId!,
+        memberId: member.id,
         todayDate: _todayDate(),
       );
 

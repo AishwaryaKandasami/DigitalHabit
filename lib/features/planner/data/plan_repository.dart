@@ -72,60 +72,7 @@ class PlanRepository {
     });
   }
 
-  /// Submit plan for parent approval.
-  ///
-  /// Also clears any previous `parentNote` so a re-submitted revision starts
-  /// from a clean slate on the parent's side.
-  Future<void> submitPlan(String familyId, String planId) async {
-    await _firestore
-        .collection(FirestorePaths.plans(familyId))
-        .doc(planId)
-        .update({
-      'status': PlanStatus.pendingApproval.name,
-      'submittedAt': FieldValue.serverTimestamp(),
-      'parentNote': null,
-    });
-  }
-
-  /// Parent approves a plan.
-  Future<void> approvePlan(String familyId, String planId) async {
-    await _firestore
-        .collection(FirestorePaths.plans(familyId))
-        .doc(planId)
-        .update({
-      'status': PlanStatus.approved.name,
-      'reviewedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// Parent requests revision with a note.
-  Future<void> requestRevision(
-    String familyId,
-    String planId,
-    String note,
-  ) async {
-    await _firestore
-        .collection(FirestorePaths.plans(familyId))
-        .doc(planId)
-        .update({
-      'status': PlanStatus.revisionRequested.name,
-      'parentNote': note,
-      'reviewedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// Stream all pending plans for a family (parent view).
-  Stream<List<PlanModel>> streamPendingPlans(String familyId) {
-    return _firestore
-        .collection(FirestorePaths.plans(familyId))
-        .where('status', isEqualTo: PlanStatus.pendingApproval.name)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => PlanModel.fromMap(doc.id, doc.data()))
-            .toList());
-  }
-
-  /// Stream all plans for a family (parent can see all children's plans).
+  /// Stream all plans for a family (grown-up history view).
   Stream<List<PlanModel>> streamAllPlans(String familyId) {
     return _firestore
         .collection(FirestorePaths.plans(familyId))

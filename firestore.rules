@@ -8,13 +8,8 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // collectionGroup query support for profile recovery
-    // (lets a signed-in user find their own member doc across families)
-    match /{path=**}/members/{memberId} {
-      allow read: if request.auth != null;
-    }
-
-    // Family-level rules
+    // Family-level rules (single-login model: one account per family,
+    // children are profiles — no cross-family member login needed).
     match /families/{familyId} {
       // Helper: check if user is the parent (owner) of this family
       function isParent() {

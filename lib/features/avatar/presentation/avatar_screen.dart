@@ -33,9 +33,7 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
     _lastPetWrite = now;
     final appUser = ref.read(appUserProvider).value;
     final member = ref.read(currentMemberProvider);
-    if (appUser?.familyId == null ||
-        appUser?.memberId == null ||
-        member == null) {
+    if (appUser?.familyId == null || member == null) {
       return;
     }
     try {
@@ -43,7 +41,7 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
           EvolutionCalculator.applyMoodChange(member.avatarState, 1);
       await ref.read(familyRepositoryProvider).updateMember(
             appUser!.familyId!,
-            appUser.memberId!,
+            member.id,
             {'avatarState': updated.toMap()},
           );
     } catch (_) {
@@ -53,11 +51,12 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
 
   Future<void> _giveTreat() async {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser?.familyId == null || appUser?.memberId == null) return;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null || member == null) return;
     try {
       final eaten = await ref.read(shopRepositoryProvider).giveDailyTreat(
             familyId: appUser!.familyId!,
-            memberId: appUser.memberId!,
+            memberId: member.id,
           );
       if (!mounted) return;
       if (eaten) {

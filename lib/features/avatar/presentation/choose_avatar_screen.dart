@@ -65,7 +65,10 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
       final authRepo = ref.read(authRepositoryProvider);
       final appUser = await authRepo.getUserProfile(firebaseUser.uid);
-      if (appUser == null || appUser.familyId == null || appUser.memberId == null) {
+      final currentMember = ref.read(currentMemberProvider);
+      if (appUser == null ||
+          appUser.familyId == null ||
+          currentMember == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile not ready. Please go back and try again.')),
@@ -79,9 +82,7 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
       // Edit-mode safety: if the member already exists and has hatched past
       // the egg, refuse to overwrite. (Shouldn't normally reach here because
       // the entry button is hidden, but don't trust the client.)
-      final currentMember = ref.read(currentMemberProvider);
-      if (currentMember != null &&
-          currentMember.avatarState.evolutionStage > 1) {
+      if (currentMember.avatarState.evolutionStage > 1) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -93,25 +94,16 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
         return;
       }
 
-      // Preserve XP / mood / health / accessories when editing. Fall back to
-      // a fresh state when there's no existing member (first-login path).
-      final AvatarState avatar = currentMember != null
-          ? currentMember.avatarState.copyWith(
-              creatureName: _nameController.text.trim(),
-              creatureType: _selected!,
-            )
-          : AvatarState(
-              creatureName: _nameController.text.trim(),
-              creatureType: _selected!,
-              moodScore: 75,
-              health: 100,
-              evolutionStage: 1,
-              level: 1,
-            );
+      // Preserve XP / mood / health / accessories — copyWith on the member's
+      // current state (a brand-new profile starts from default AvatarState).
+      final AvatarState avatar = currentMember.avatarState.copyWith(
+        creatureName: _nameController.text.trim(),
+        creatureType: _selected!,
+      );
 
       await familyRepo.updateMember(
         appUser.familyId!,
-        appUser.memberId!,
+        currentMember.id,
         {'avatarState': avatar.toMap()},
       );
 

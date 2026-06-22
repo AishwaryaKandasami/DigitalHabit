@@ -2,20 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/message_repository.dart';
 import '../domain/message_model.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 
 final messageRepositoryProvider = Provider<MessageRepository>((ref) {
   return MessageRepository();
 });
 
-/// Stream of recent messages addressed to the signed-in member (kid view).
+/// Stream of recent messages addressed to the active child (kid view).
 final myMessagesProvider = StreamProvider<List<MessageModel>>((ref) {
   final appUser = ref.watch(appUserProvider).value;
-  if (appUser?.familyId == null || appUser?.memberId == null) {
+  final memberId = ref.watch(currentMemberProvider)?.id;
+  if (appUser?.familyId == null || memberId == null) {
     return Stream.value(const <MessageModel>[]);
   }
   return ref
       .read(messageRepositoryProvider)
-      .streamForMember(appUser!.familyId!, appUser.memberId!);
+      .streamForMember(appUser!.familyId!, memberId);
 });
 
 /// Latest unread message for the kid, or null when there are none.

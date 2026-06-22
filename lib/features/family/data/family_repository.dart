@@ -12,10 +12,11 @@ class FamilyRepository {
   FamilyRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  /// Create a new family with an invite code.
+  /// Create a new family (single-login model).
   Future<FamilyModel> createFamily({
     required String name,
     required String parentUid,
+    String? grownupPin,
   }) async {
     final inviteCode = IdGenerator.inviteCode();
     final docRef = _firestore.collection(FirestorePaths.families).doc();
@@ -25,10 +26,18 @@ class FamilyRepository {
       parentUid: parentUid,
       inviteCode: inviteCode,
       createdAt: DateTime.now(),
-      settings: const FamilySettings(),
+      settings: FamilySettings(grownupPin: grownupPin),
     );
     await docRef.set(family.toMap());
     return family;
+  }
+
+  /// Update the grown-up PIN in family settings.
+  Future<void> setGrownupPin(String familyId, String pin) async {
+    await _firestore
+        .collection(FirestorePaths.families)
+        .doc(familyId)
+        .update({'settings.grownupPin': pin});
   }
 
   /// Find family by invite code.

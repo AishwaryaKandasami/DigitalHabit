@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/task_log_repository.dart';
 import '../domain/task_log_model.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 
 final taskLogRepositoryProvider = Provider<TaskLogRepository>((ref) {
   return TaskLogRepository();
@@ -13,34 +14,16 @@ String todayDate() {
   return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 }
 
-/// Stream today's completed task logs for the current child.
+/// Stream today's completed task logs for the active child.
 final todayLogsProvider = StreamProvider<List<TaskLogModel>>((ref) {
   final appUser = ref.watch(appUserProvider).value;
-  if (appUser?.familyId == null || appUser?.memberId == null) {
+  final memberId = ref.watch(currentMemberProvider)?.id;
+  if (appUser?.familyId == null || memberId == null) {
     return Stream.value([]);
   }
   return ref.read(taskLogRepositoryProvider).streamLogsForDate(
         appUser!.familyId!,
-        appUser.memberId!,
+        memberId,
         todayDate(),
-      );
-});
-
-/// Stream all pending verification logs for the family (parent view).
-final pendingVerificationProvider = StreamProvider<List<TaskLogModel>>((ref) {
-  final appUser = ref.watch(appUserProvider).value;
-  if (appUser?.familyId == null) return Stream.value([]);
-  return ref
-      .read(taskLogRepositoryProvider)
-      .streamPendingVerification(appUser!.familyId!);
-});
-
-/// Apply mood decay retroactively on app open. Call once when dashboard loads.
-final applyMoodDecayProvider = FutureProvider<void>((ref) async {
-  final appUser = ref.watch(appUserProvider).value;
-  if (appUser?.familyId == null || appUser?.memberId == null) return;
-  await ref.read(taskLogRepositoryProvider).applyMoodDecay(
-        familyId: appUser!.familyId!,
-        memberId: appUser.memberId!,
       );
 });

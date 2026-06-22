@@ -8,12 +8,11 @@ import '../../planner/domain/plan_model.dart';
 import '../../planner/domain/task_model.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 import '../providers/task_providers.dart';
 import '../domain/reward_calculator.dart';
-import '../domain/task_log_model.dart';
 import '../data/task_log_repository.dart';
 import '../../../core/constants/game_constants.dart';
-import 'widgets/parent_feedback_chip.dart';
 
 class TaskCompletionScreen extends ConsumerWidget {
   const TaskCompletionScreen({super.key});
@@ -39,7 +38,7 @@ class TaskCompletionScreen extends ConsumerWidget {
         loading: () => const LoadingWidget(),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (plan) {
-          if (plan == null || plan.status != PlanStatus.approved) {
+          if (plan == null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -47,11 +46,11 @@ class TaskCompletionScreen extends ConsumerWidget {
                   Icon(Icons.event_busy,
                       size: 64, color: AppColors.textSecondary.withAlpha(80)),
                   const SizedBox(height: 12),
-                  Text('No approved plan for this week',
+                  Text('No plan for this week yet',
                       style: AppTextStyles.body),
                   const SizedBox(height: 4),
                   Text(
-                    'Create and submit a plan first!',
+                    'Head to the Planner to add some activities!',
                     style: AppTextStyles.caption,
                   ),
                 ],
@@ -66,10 +65,6 @@ class TaskCompletionScreen extends ConsumerWidget {
                   ?.map((l) => l.taskId)
                   .toSet() ??
               {};
-          final logsByTaskId = <String, TaskLogModel>{
-            for (final l in (logsAsync.value ?? const <TaskLogModel>[]))
-              l.taskId: l,
-          };
 
           if (todayTasks.isEmpty) {
             return Center(
@@ -155,7 +150,6 @@ class TaskCompletionScreen extends ConsumerWidget {
                     return _TaskTile(
                       task: task,
                       isDone: isDone,
-                      log: logsByTaskId[task.taskId],
                       onComplete: isDone
                           ? null
                           : () => _completeTask(context, ref, plan, task),
@@ -177,13 +171,14 @@ class TaskCompletionScreen extends ConsumerWidget {
     TaskModel task,
   ) async {
     final appUser = ref.read(appUserProvider).value;
-    if (appUser == null) return;
+    final member = ref.read(currentMemberProvider);
+    if (appUser?.familyId == null || member == null) return;
 
     try {
       final repo = ref.read(taskLogRepositoryProvider);
       final result = await repo.completeTask(
-        familyId: appUser.familyId!,
-        memberId: appUser.memberId!,
+        familyId: appUser!.familyId!,
+        memberId: member.id,
         planId: plan.id,
         date: _todayDate(),
         task: task,
@@ -192,7 +187,7 @@ class TaskCompletionScreen extends ConsumerWidget {
       // Update streak
       await repo.updateStreak(
         familyId: appUser.familyId!,
-        memberId: appUser.memberId!,
+        memberId: member.id,
         todayDate: _todayDate(),
       );
 
@@ -201,7 +196,7 @@ class TaskCompletionScreen extends ConsumerWidget {
       final totalTasksToday = plan.tasksForDay(dayName).length;
       final fullDayBonus = await repo.checkFullDayBonus(
         familyId: appUser.familyId!,
-        memberId: appUser.memberId!,
+        memberId: member.id,
         date: _todayDate(),
         totalTasksToday: totalTasksToday,
       );
@@ -267,13 +262,11 @@ class TaskCompletionScreen extends ConsumerWidget {
 class _TaskTile extends StatelessWidget {
   final TaskModel task;
   final bool isDone;
-  final TaskLogModel? log;
   final VoidCallback? onComplete;
 
   const _TaskTile({
     required this.task,
     required this.isDone,
-    this.log,
     this.onComplete,
   });
 
@@ -281,13 +274,11 @@ class _TaskTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final timeStr =
         '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
-    final hasFeedback = log != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: isDone ? AppColors.accentGreen.withAlpha(15) : null,
       child: ListTile(
-        isThreeLine: hasFeedback && log!.verifiedByParent != null,
         leading: Container(
           width: 44,
           height: 44,
@@ -309,19 +300,9 @@ class _TaskTile extends StatelessWidget {
             color: isDone ? AppColors.textSecondary : null,
           ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$timeStr  •  ${task.duration}min  •  ${task.category.displayName}',
-              style: AppTextStyles.caption,
-            ),
-            if (hasFeedback)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: ParentFeedbackChip(log: log!),
-              ),
-          ],
+        subtitle: Text(
+          '$timeStr  •  ${task.duration}min  •  ${task.category.displayName}',
+          style: AppTextStyles.caption,
         ),
         trailing: isDone
             ? const Icon(Icons.check_circle, color: AppColors.accentGreen)

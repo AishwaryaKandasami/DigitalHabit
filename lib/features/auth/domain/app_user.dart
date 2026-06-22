@@ -1,37 +1,33 @@
+/// Member role within a family. With the single-login model the signed-in
+/// account is the family owner; member docs are child profiles. The enum is
+/// kept for member docs (and legacy data) but no longer lives on [AppUser].
 enum UserRole { parent, child }
 
+/// The signed-in family account. There is exactly one login per family; the
+/// children are profiles ([MemberModel]) inside the family, selected via the
+/// active-profile provider — not separate accounts.
 class AppUser {
   final String uid;
   final String? email;
   final String? familyId;
-  final String? memberId;
-  final UserRole? role;
 
   const AppUser({
     required this.uid,
     this.email,
     this.familyId,
-    this.memberId,
-    this.role,
   });
 
   bool get hasFamily => familyId != null;
-  bool get isParent => role == UserRole.parent;
-  bool get isChild => role == UserRole.child;
 
   AppUser copyWith({
     String? uid,
     String? email,
     String? familyId,
-    String? memberId,
-    UserRole? role,
   }) {
     return AppUser(
       uid: uid ?? this.uid,
       email: email ?? this.email,
       familyId: familyId ?? this.familyId,
-      memberId: memberId ?? this.memberId,
-      role: role ?? this.role,
     );
   }
 
@@ -39,17 +35,11 @@ class AppUser {
         'uid': uid,
         'email': email,
         'familyId': familyId,
-        'memberId': memberId,
-        'role': role?.name,
       };
 
   factory AppUser.fromMap(Map<String, dynamic> map) => AppUser(
         uid: map['uid'] as String,
         email: map['email'] as String?,
         familyId: map['familyId'] as String?,
-        memberId: map['memberId'] as String?,
-        role: map['role'] != null
-            ? UserRole.values.byName(map['role'] as String)
-            : null,
       );
 }

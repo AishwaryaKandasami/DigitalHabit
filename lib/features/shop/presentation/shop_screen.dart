@@ -152,7 +152,7 @@ class ShopScreen extends ConsumerWidget {
       final appUser = ref.read(appUserProvider).value!;
       await ref.read(shopRepositoryProvider).purchaseItem(
             familyId: appUser.familyId!,
-            memberId: appUser.memberId!,
+            memberId: member.id,
             item: item,
           );
 

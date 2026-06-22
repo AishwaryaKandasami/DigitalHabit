@@ -31,7 +31,7 @@ class TaskLogRepository {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   /// Complete a task: create log, earn coins/XP, update wallet + avatar.
-  /// Uses a transaction to read current member state, compute new avatar, write atomically.
+  /// Rewards are granted immediately — there is no parent verification step.
   Future<TaskCompletionResult> completeTask({
     required String familyId,
     required String memberId,
@@ -68,48 +68,43 @@ class TaskLogRepository {
     int newStage = 1;
 
     await _firestore.runTransaction((txn) async {
-      // Read current member to get avatar state
       final memberSnap = await txn.get(memberRef);
       final member = MemberModel.fromMap(memberSnap.id, memberSnap.data()!);
 
       previousStage = member.avatarState.evolutionStage;
 
-      // Apply XP gain
       AvatarState updatedAvatar =
           EvolutionCalculator.addXp(member.avatarState, reward.xp);
 
-      // Apply mood change based on task health
+      // All-positive: healthy tasks lift mood; others never subtract.
       final moodDelta = task.isHealthy
           ? GameConstants.moodHealthyTask
           : GameConstants.moodUnhealthyTask;
-      updatedAvatar = EvolutionCalculator.applyMoodChange(updatedAvatar, moodDelta);
+      updatedAvatar =
+          EvolutionCalculator.applyMoodChange(updatedAvatar, moodDelta);
 
       newStage = updatedAvatar.evolutionStage;
       leveledUp = newStage > previousStage;
 
-      // Update last active date for streak tracking
-      final todayStr = date;
-
-      // 1. Task log
       txn.set(logRef, log.toMap());
 
-      // 2. Update member: wallet + avatar + lastActiveDate
       txn.update(memberRef, {
         'wallet.coins': FieldValue.increment(reward.coins),
         'wallet.totalEarned': FieldValue.increment(reward.coins),
         'avatarState': updatedAvatar.toMap(),
-        'lastActiveDate': todayStr,
+        'lastActiveDate': date,
       });
 
-      // 3. Transaction record
-      txn.set(txRef, TransactionModel(
-        id: txRef.id,
-        memberId: memberId,
-        type: TransactionType.earn,
-        amount: reward.coins,
-        reason: 'Completed: ${task.title}',
-        createdAt: DateTime.now(),
-      ).toMap());
+      txn.set(
+          txRef,
+          TransactionModel(
+            id: txRef.id,
+            memberId: memberId,
+            type: TransactionType.earn,
+            amount: reward.coins,
+            reason: 'Completed: ${task.title}',
+            createdAt: DateTime.now(),
+          ).toMap());
     });
 
     return TaskCompletionResult(
@@ -118,167 +113,6 @@ class TaskLogRepository {
       previousStage: previousStage,
       newStage: newStage,
     );
-  }
-
-  /// Parent verifies a completed task.
-  ///
-  /// - `approved = false` (rejected) → no rewards, just marks the log.
-  /// - `approved = true`, feedback `positive` or null → standard bonus
-  ///   (+XP, +coins, +mood). Parent's praise nudges mood up.
-  /// - `approved = true`, feedback `negative` → task still counts as
-  ///   verified so it doesn't sit in the queue forever, but the kid's
-  ///   coins are reduced (no bonus, penalty deducted), mood drops, and
-  ///   no XP bonus is awarded. The comment is stored on the log.
-  Future<void> verifyTask({
-    required String familyId,
-    required String memberId,
-    required TaskLogModel log,
-    required bool approved,
-    ParentFeedback? feedback,
-    String? comment,
-  }) async {
-    final logRef = _firestore
-        .collection(FirestorePaths.taskLogs(familyId))
-        .doc(log.id);
-
-    final cleanComment =
-        (comment != null && comment.trim().isNotEmpty) ? comment.trim() : null;
-
-    if (!approved) {
-      // Rejected — record note if parent bothered to write one, but no
-      // wallet / mood changes.
-      await logRef.update({
-        'verifiedByParent': false,
-        'parentFeedback': feedback?.name,
-        'parentComment': cleanComment,
-        'seenByChild': false, // new feedback the kid hasn't acked yet
-      });
-      return;
-    }
-
-    final memberRef = _firestore
-        .collection(FirestorePaths.members(familyId))
-        .doc(memberId);
-    final txRef =
-        _firestore.collection(FirestorePaths.transactions(familyId)).doc();
-
-    final isNegative = feedback == ParentFeedback.negative;
-
-    await _firestore.runTransaction((txn) async {
-      final memberSnap = await txn.get(memberRef);
-      final member = MemberModel.fromMap(memberSnap.id, memberSnap.data()!);
-
-      int coinDelta;
-      int xpDelta;
-      int moodDelta;
-      String txReason;
-
-      if (isNegative) {
-        coinDelta = -GameConstants.coinsParentCritiquePenalty;
-        xpDelta = 0;
-        moodDelta = GameConstants.moodParentCritique;
-        txReason = 'Parent feedback (needs improvement): ${log.title}';
-      } else {
-        final bonus = RewardCalculator.verificationBonus;
-        coinDelta = bonus.coins;
-        xpDelta = bonus.xp;
-        moodDelta = GameConstants.moodParentPraise;
-        txReason = 'Parent verified: ${log.title}';
-      }
-
-      // Apply XP + mood to avatar.
-      AvatarState updatedAvatar = member.avatarState;
-      if (xpDelta != 0) {
-        updatedAvatar = EvolutionCalculator.addXp(updatedAvatar, xpDelta);
-      }
-      updatedAvatar =
-          EvolutionCalculator.applyMoodChange(updatedAvatar, moodDelta);
-
-      txn.update(logRef, {
-        'verifiedByParent': true,
-        'parentFeedback': feedback?.name,
-        'parentComment': cleanComment,
-        'seenByChild': false, // new feedback the kid hasn't acked yet
-      });
-
-      final memberUpdates = <String, dynamic>{
-        'avatarState': updatedAvatar.toMap(),
-      };
-      if (coinDelta > 0) {
-        memberUpdates['wallet.coins'] = FieldValue.increment(coinDelta);
-        memberUpdates['wallet.totalEarned'] = FieldValue.increment(coinDelta);
-      } else if (coinDelta < 0) {
-        // Don't subtract from totalEarned — that's a lifetime count.
-        memberUpdates['wallet.coins'] = FieldValue.increment(coinDelta);
-      }
-      txn.update(memberRef, memberUpdates);
-
-      if (coinDelta != 0) {
-        txn.set(
-            txRef,
-            TransactionModel(
-              id: txRef.id,
-              memberId: memberId,
-              type: coinDelta >= 0
-                  ? TransactionType.earn
-                  : TransactionType.spend,
-              amount: coinDelta.abs(),
-              reason: txReason,
-              createdAt: DateTime.now(),
-            ).toMap());
-      }
-    });
-  }
-
-  /// Mark a batch of task logs as "seen" by the kid (clears the new-feedback
-  /// badge on the dashboard). Silently does nothing on an empty list.
-  Future<void> markFeedbackSeen({
-    required String familyId,
-    required List<String> logIds,
-  }) async {
-    if (logIds.isEmpty) return;
-    final batch = _firestore.batch();
-    for (final id in logIds) {
-      final ref = _firestore
-          .collection(FirestorePaths.taskLogs(familyId))
-          .doc(id);
-      batch.update(ref, {'seenByChild': true});
-    }
-    await batch.commit();
-  }
-
-  /// Apply daily mood decay retroactively based on last active date.
-  Future<void> applyMoodDecay({
-    required String familyId,
-    required String memberId,
-  }) async {
-    final memberRef = _firestore
-        .collection(FirestorePaths.members(familyId))
-        .doc(memberId);
-
-    await _firestore.runTransaction((txn) async {
-      final snap = await txn.get(memberRef);
-      final member = MemberModel.fromMap(snap.id, snap.data()!);
-
-      final lastActive = member.lastActiveDate;
-      if (lastActive == null) return;
-
-      final lastDate = DateTime.parse(lastActive);
-      final today = DateTime.now();
-      final daysMissed = DateTime(today.year, today.month, today.day)
-              .difference(DateTime(lastDate.year, lastDate.month, lastDate.day))
-              .inDays -
-          1; // subtract 1 because the last active day itself doesn't decay
-
-      if (daysMissed <= 0) return;
-
-      final updatedAvatar =
-          EvolutionCalculator.applyMoodDecay(member.avatarState, daysMissed);
-
-      txn.update(memberRef, {
-        'avatarState': updatedAvatar.toMap(),
-      });
-    });
   }
 
   /// Update streak: call after task completion to check/increment streak.
@@ -309,10 +143,8 @@ class TaskLogRepository {
             .inDays;
 
         if (diff == 1) {
-          // Consecutive day — increment streak
           newStreak += 1;
         } else if (diff > 1) {
-          // Streak broken
           newStreak = 1;
         }
         // diff == 0 means same day, don't change streak
@@ -337,7 +169,6 @@ class TaskLogRepository {
         updates['wallet.totalEarned'] = FieldValue.increment(bonus.coins);
         updates['avatarState'] = updatedAvatar.toMap();
 
-        // Also create a transaction for the streak bonus
         final txRef = _firestore
             .collection(FirestorePaths.transactions(familyId))
             .doc();
@@ -364,7 +195,6 @@ class TaskLogRepository {
     required String date,
     required int totalTasksToday,
   }) async {
-    // Count completed tasks for today
     final logsSnap = await _firestore
         .collection(FirestorePaths.taskLogs(familyId))
         .where('memberId', isEqualTo: memberId)
@@ -375,7 +205,6 @@ class TaskLogRepository {
       return null;
     }
 
-    // All tasks done! Award full day bonus
     final bonus = RewardCalculator.fullDayBonus;
     final memberRef = _firestore
         .collection(FirestorePaths.members(familyId))
@@ -419,16 +248,6 @@ class TaskLogRepository {
         .collection(FirestorePaths.taskLogs(familyId))
         .where('memberId', isEqualTo: memberId)
         .where('date', isEqualTo: date)
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => TaskLogModel.fromMap(d.id, d.data())).toList());
-  }
-
-  /// Stream all pending verification logs for the family (parent view).
-  Stream<List<TaskLogModel>> streamPendingVerification(String familyId) {
-    return _firestore
-        .collection(FirestorePaths.taskLogs(familyId))
-        .where('verifiedByParent', isNull: true)
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => TaskLogModel.fromMap(d.id, d.data())).toList());

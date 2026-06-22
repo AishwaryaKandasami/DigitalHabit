@@ -65,33 +65,20 @@ class PlanModel {
               .where((t) => t.category.name == 'screenTime')
               .fold(0, (s, t) => s + t.duration));
 
-  bool get isSubmittable =>
-      status == PlanStatus.draft || status == PlanStatus.revisionRequested;
+  /// No approval gate in the single-login model — plans are always editable.
+  bool get isEditable => true;
 
-  bool get isEditable =>
-      status == PlanStatus.draft || status == PlanStatus.revisionRequested;
-
-  /// Whether a specific day can be edited right now.
-  /// - draft / revisionRequested: every day is editable.
-  /// - approved: today and future days stay editable; past days lock so
-  ///   history can't be rewritten. Edits auto-save and keep the approval.
-  /// - pendingApproval: locked while waiting for the parent.
+  /// Per-day edit rule: today and future days are editable; past days lock so
+  /// history isn't rewritten. Edits auto-save (no submit/approval step).
   bool isDayEditable(String dayName) {
-    if (status == PlanStatus.draft ||
-        status == PlanStatus.revisionRequested) {
-      return true;
-    }
-    if (status == PlanStatus.approved) {
-      final idx = dayNames.indexOf(dayName);
-      if (idx < 0) return false;
-      final monday = DateTime.parse(weekStart);
-      final dayDate = DateTime(monday.year, monday.month, monday.day)
-          .add(Duration(days: idx));
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      return !dayDate.isBefore(today);
-    }
-    return false; // pendingApproval
+    final idx = dayNames.indexOf(dayName);
+    if (idx < 0) return false;
+    final monday = DateTime.parse(weekStart);
+    final dayDate = DateTime(monday.year, monday.month, monday.day)
+        .add(Duration(days: idx));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return !dayDate.isBefore(today);
   }
 
   factory PlanModel.empty({
@@ -102,7 +89,8 @@ class PlanModel {
       id: '',
       memberId: memberId,
       weekStart: weekStart,
-      status: PlanStatus.draft,
+      // Active immediately — no draft/pending/approval cycle.
+      status: PlanStatus.approved,
       days: {for (final day in dayNames) day: []},
     );
   }

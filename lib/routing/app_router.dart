@@ -5,23 +5,21 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/auth/presentation/parent_signup_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/profile_picker_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/avatar/presentation/choose_avatar_screen.dart';
 import '../features/avatar/presentation/avatar_screen.dart';
 import '../features/dashboard/presentation/kid_dashboard_screen.dart';
-import '../features/dashboard/presentation/parent_dashboard_screen.dart';
+import '../features/family/presentation/grownup_gate_screen.dart';
 import '../features/family/presentation/family_management_screen.dart';
 import '../features/planner/presentation/weekly_planner_screen.dart';
 import '../features/planner/presentation/day_planner_screen.dart';
-import '../features/planner/presentation/plan_review_screen.dart';
 import '../features/tasks/presentation/task_completion_screen.dart';
-import '../features/tasks/presentation/task_verification_screen.dart';
 import '../features/shop/presentation/shop_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Paths that a signed-in user should be redirected away from (they'd bounce
-/// them straight to dashboard).
+/// Paths a signed-in family should be redirected away from (into the app).
 const _publicOnlyPaths = {'/', '/signup', '/login'};
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -33,46 +31,54 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authAsync = ref.read(authStateProvider);
       final appUserAsync = ref.read(appUserProvider);
 
-      // Still loading auth state — don't redirect yet.
       if (authAsync.isLoading) return null;
       final firebaseUser = authAsync.value;
-      if (firebaseUser == null) {
-        // Not signed in: only allow public paths.
-        final loc = state.matchedLocation;
-        if (_publicOnlyPaths.contains(loc)) return null;
-        // Any protected path → go home.
-        return '/';
-      }
-
-      // Signed in. Wait for profile lookup before deciding.
-      if (appUserAsync.isLoading) return null;
-      final appUser = appUserAsync.value;
       final loc = state.matchedLocation;
 
-      // Signed in but no profile (shouldn't happen after recovery path, but
-      // handle gracefully): let them stay on public paths to re-setup.
-      if (appUser == null) {
+      if (firebaseUser == null) {
+        // Not signed in: only public paths allowed.
+        return _publicOnlyPaths.contains(loc) ? null : '/';
+      }
+
+      // Signed in. Wait for the family lookup.
+      if (appUserAsync.isLoading) return null;
+      final appUser = appUserAsync.value;
+
+      if (appUser == null || appUser.familyId == null) {
+        // Signed in but no family mapping — allow public + onboarding.
         if (_publicOnlyPaths.contains(loc) || loc == '/choose-avatar') {
           return null;
         }
         return '/';
       }
 
-      // Signed in with a profile. Skip public-only screens → dashboard.
-      final dashboard = appUser.isParent ? '/parent' : '/kid';
-      if (_publicOnlyPaths.contains(loc)) return dashboard;
+      // Signed in with a family → into the app (single shell).
+      if (_publicOnlyPaths.contains(loc)) return '/kid';
       return null;
     },
     routes: [
-      // Auth routes
       GoRoute(path: '/', builder: (_, _) => const WelcomeScreen()),
       GoRoute(path: '/signup', builder: (_, _) => const ParentSignupScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
           path: '/choose-avatar',
           builder: (_, _) => const ChooseAvatarScreen()),
+      GoRoute(
+          path: '/who', builder: (_, _) => const ProfilePickerScreen()),
 
-      // Kid shell with bottom nav
+      // Grown-up area (PIN-gated monitor + setup).
+      GoRoute(
+        path: '/grownups',
+        builder: (_, _) => const GrownupGateScreen(),
+        routes: [
+          GoRoute(
+            path: 'family',
+            builder: (_, _) => const FamilyManagementScreen(),
+          ),
+        ],
+      ),
+
+      // Single app shell = the kid experience for the active profile.
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return Scaffold(
@@ -86,7 +92,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     icon: Icon(Icons.calendar_month), label: 'Planner'),
                 NavigationDestination(
                     icon: Icon(Icons.shopping_bag), label: 'Shop'),
-                NavigationDestination(icon: Icon(Icons.pets), label: 'Avatar'),
+                NavigationDestination(icon: Icon(Icons.pets), label: 'Garden'),
               ],
             ),
           );
@@ -120,57 +126,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/kid/shop',
-                builder: (_, _) => const ShopScreen()),
+                path: '/kid/shop', builder: (_, _) => const ShopScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/kid/avatar',
-                builder: (_, _) => const AvatarScreen()),
-          ]),
-        ],
-      ),
-
-      // Parent shell with bottom nav
-      StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) {
-          return Scaffold(
-            body: navigationShell,
-            bottomNavigationBar: NavigationBar(
-              selectedIndex: navigationShell.currentIndex,
-              onDestinationSelected: (i) => navigationShell.goBranch(i),
-              destinations: const [
-                NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-                NavigationDestination(
-                    icon: Icon(Icons.checklist), label: 'Plans'),
-                NavigationDestination(
-                    icon: Icon(Icons.family_restroom), label: 'Family'),
-                NavigationDestination(
-                    icon: Icon(Icons.verified_user), label: 'Verify'),
-              ],
-            ),
-          );
-        },
-        branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/parent',
-                builder: (_, _) => const ParentDashboardScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/parent/plans',
-                builder: (_, _) => const PlanReviewScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/parent/family',
-                builder: (_, _) => const FamilyManagementScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/parent/verify',
-                builder: (_, _) => const TaskVerificationScreen()),
+                path: '/kid/avatar', builder: (_, _) => const AvatarScreen()),
           ]),
         ],
       ),
@@ -178,8 +138,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Listenable that pokes GoRouter to re-run its redirect when auth state or
-/// the user profile changes.
+/// Re-runs the redirect when auth state or the family mapping changes.
 class _RouterRefresh extends ChangeNotifier {
   _RouterRefresh(this._ref) {
     _ref.listen(authStateProvider, (_, _) => notifyListeners());

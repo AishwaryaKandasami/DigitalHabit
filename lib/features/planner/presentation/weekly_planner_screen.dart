@@ -10,6 +10,7 @@ import '../domain/plan_model.dart';
 import '../domain/task_model.dart';
 import '../providers/planner_providers.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 
 class WeeklyPlannerScreen extends ConsumerStatefulWidget {
   const WeeklyPlannerScreen({super.key});
@@ -46,57 +47,18 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
 
   /// Sync draft plan from Firestore existing plan (or create empty).
   void _syncDraftFromExisting(PlanModel? existingPlan) {
-    final appUser = ref.read(appUserProvider).value;
-    if (appUser?.memberId == null) return;
+    final memberId = ref.read(currentMemberProvider)?.id;
+    if (memberId == null) return;
     final weekStart = ref.read(selectedWeekStartProvider);
 
     if (existingPlan != null) {
       ref.read(draftPlanProvider.notifier).set(existingPlan);
     } else {
       final draft = PlanModel.empty(
-        memberId: appUser!.memberId!,
+        memberId: memberId,
         weekStart: weekStart,
       );
       ref.read(draftPlanProvider.notifier).set(draft);
-    }
-  }
-
-  Future<void> _submitPlan() async {
-    final appUser = ref.read(appUserProvider).value;
-    final draft = ref.read(draftPlanProvider);
-    if (appUser == null || draft == null) return;
-
-    if (draft.totalTasks == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add some tasks before submitting!')),
-      );
-      return;
-    }
-
-    try {
-      final repo = ref.read(planRepositoryProvider);
-      // Save the plan first
-      final saved = await repo.savePlan(appUser.familyId!, draft);
-      // Then submit for approval
-      await repo.submitPlan(appUser.familyId!, saved.id);
-
-      ref.invalidate(currentPlanProvider);
-      ref.read(draftPlanProvider.notifier).set(null);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Plan submitted for parent approval!'),
-            backgroundColor: AppColors.accentGreen,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
     }
   }
 
@@ -106,10 +68,9 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
   /// Copy the previous week's plan into the currently selected week.
   Future<void> _copyLastWeek() async {
     final appUser = ref.read(appUserProvider).value;
+    final memberId = ref.read(currentMemberProvider)?.id;
     final draft = ref.read(draftPlanProvider);
-    if (appUser?.familyId == null ||
-        appUser?.memberId == null ||
-        draft == null) {
+    if (appUser?.familyId == null || memberId == null || draft == null) {
       return;
     }
 
@@ -122,7 +83,7 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
     try {
       prevPlan = await repo.getPlanForWeek(
         appUser!.familyId!,
-        appUser.memberId!,
+        memberId,
         prevIso,
       );
     } catch (e) {
@@ -292,10 +253,6 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
         final plan = draft!;
         final isEditable = plan.isEditable;
 
-        // Use Firestore plan as source of truth for status banner (falls back
-        // to draft for brand-new/unsaved plans).
-        final bannerPlan = existingPlan ?? plan;
-
         return Scaffold(
           appBar: AppBar(
             title: const Text('Weekly Plan'),
@@ -305,13 +262,6 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
                   onPressed: _copyLastWeek,
                   icon: const Icon(Icons.copy_all, color: Colors.white),
                   tooltip: "Copy last week's plan",
-                ),
-              if (plan.isSubmittable)
-                TextButton.icon(
-                  onPressed: _submitPlan,
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  label: const Text('Submit',
-                      style: TextStyle(color: Colors.white)),
                 ),
             ],
             bottom: TabBar(
@@ -344,21 +294,6 @@ class _WeeklyPlannerScreenState extends ConsumerState<WeeklyPlannerScreen>
                 onPrev: () => _changeWeek(-7),
                 onNext: () => _changeWeek(7),
                 onPick: _pickWeekDate,
-              ),
-
-              // Status banner (from Firestore source of truth)
-              _StatusBanner(
-                status: bannerPlan.status,
-                parentNote: bannerPlan.parentNote,
-                onEdit: bannerPlan.status == PlanStatus.revisionRequested
-                    ? () {
-                        // Jump to today's tab, then open that day's editor.
-                        final todayIdx = _todayIndex();
-                        _tabController.animateTo(todayIdx);
-                        final dayName = PlanModel.dayNames[todayIdx];
-                        context.push('/kid/planner/day/$dayName');
-                      }
-                    : null,
               ),
 
               // Tab content
@@ -469,94 +404,6 @@ class _WeekNavigator extends StatelessWidget {
             icon: const Icon(Icons.chevron_right),
             tooltip: 'Next week',
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBanner extends StatelessWidget {
-  final PlanStatus status;
-  final String? parentNote;
-  final VoidCallback? onEdit;
-
-  const _StatusBanner({
-    required this.status,
-    this.parentNote,
-    this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (status == PlanStatus.draft) return const SizedBox.shrink();
-
-    final (color, icon, label) = switch (status) {
-      PlanStatus.pendingApproval => (
-          AppColors.accent,
-          Icons.hourglass_top,
-          'Waiting for parent approval'
-        ),
-      PlanStatus.approved => (
-          AppColors.accentGreen,
-          Icons.check_circle,
-          'Approved by parent!'
-        ),
-      PlanStatus.revisionRequested => (
-          AppColors.accentRed,
-          Icons.edit_note,
-          'Parent requested changes'
-        ),
-      _ => (AppColors.textSecondary, Icons.info, ''),
-    };
-
-    final isRevision = status == PlanStatus.revisionRequested;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      color: color.withAlpha(25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(label,
-                    style: AppTextStyles.bodyBold.copyWith(color: color)),
-              ),
-              if (isRevision && onEdit != null)
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Edit & resubmit'),
-                  style: TextButton.styleFrom(foregroundColor: color),
-                ),
-            ],
-          ),
-          if (parentNote != null && parentNote!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              '"$parentNote"',
-              style: AppTextStyles.caption.copyWith(fontStyle: FontStyle.italic),
-            ),
-          ],
-          if (isRevision) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Tap any day or task to change it, then tap Submit at the top.',
-              style: AppTextStyles.caption,
-            ),
-          ],
-          if (status == PlanStatus.approved) ...[
-            const SizedBox(height: 4),
-            Text(
-              'You can still add or change tasks for today and upcoming days — '
-              'changes save automatically.',
-              style: AppTextStyles.caption,
-            ),
-          ],
         ],
       ),
     );

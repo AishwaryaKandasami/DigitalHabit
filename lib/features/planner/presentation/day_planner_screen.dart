@@ -154,18 +154,23 @@ class DayPlannerScreen extends ConsumerWidget {
   bool _matches(TaskModel a, TaskModel b) =>
       a.title == b.title && a.hour == b.hour && a.minute == b.minute;
 
-  /// Update the in-memory draft AND, for an already-approved plan, persist the
-  /// change immediately so edits to today/future days stick without needing
-  /// re-approval. Draft/revision plans still save only on Submit.
-  void _commitDraft(WidgetRef ref, PlanModel newPlan) {
+  /// Update the in-memory draft AND persist it immediately. There's no submit
+  /// / approval step — plans are active as soon as they're edited. A brand-new
+  /// plan (empty id) is created on first save; we then adopt the returned id so
+  /// later edits patch the same doc.
+  Future<void> _commitDraft(WidgetRef ref, PlanModel newPlan) async {
     ref.read(draftPlanProvider.notifier).set(newPlan);
-    if (newPlan.status == PlanStatus.approved && newPlan.id.isNotEmpty) {
-      final appUser = ref.read(appUserProvider).value;
-      final familyId = appUser?.familyId;
-      if (familyId != null) {
-        // Fire-and-forget; last-write-wins is fine for a single editor.
-        ref.read(planRepositoryProvider).savePlan(familyId, newPlan);
+    final appUser = ref.read(appUserProvider).value;
+    final familyId = appUser?.familyId;
+    if (familyId == null) return;
+    try {
+      final saved =
+          await ref.read(planRepositoryProvider).savePlan(familyId, newPlan);
+      if (saved.id != newPlan.id) {
+        ref.read(draftPlanProvider.notifier).set(saved);
       }
+    } catch (_) {
+      // best-effort; the in-memory draft already reflects the change
     }
   }
 

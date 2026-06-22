@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/plan_repository.dart';
 import '../domain/plan_model.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../family/providers/family_providers.dart';
 
 final planRepositoryProvider = Provider<PlanRepository>((ref) {
   return PlanRepository();
@@ -26,30 +27,22 @@ final selectedWeekStartProvider =
     NotifierProvider<SelectedWeekStartNotifier, String>(
         SelectedWeekStartNotifier.new);
 
-/// Stream the current child's plan for the selected week.
+/// Stream the active child's plan for the selected week.
 final currentPlanProvider = StreamProvider<PlanModel?>((ref) {
   final appUser = ref.watch(appUserProvider).value;
+  final memberId = ref.watch(currentMemberProvider)?.id;
   final weekStart = ref.watch(selectedWeekStartProvider);
-  if (appUser?.familyId == null || appUser?.memberId == null) {
+  if (appUser?.familyId == null || memberId == null) {
     return Stream.value(null);
   }
   return ref.read(planRepositoryProvider).streamPlanForWeek(
         appUser!.familyId!,
-        appUser.memberId!,
+        memberId,
         weekStart,
       );
 });
 
-/// Stream all pending plans for parent review.
-final pendingPlansProvider = StreamProvider<List<PlanModel>>((ref) {
-  final appUser = ref.watch(appUserProvider).value;
-  if (appUser?.familyId == null) return Stream.value([]);
-  return ref
-      .read(planRepositoryProvider)
-      .streamPendingPlans(appUser!.familyId!);
-});
-
-/// Stream all plans for the family (parent view).
+/// Stream all plans for the family (grown-up history view).
 final allPlansProvider = StreamProvider<List<PlanModel>>((ref) {
   final appUser = ref.watch(appUserProvider).value;
   if (appUser?.familyId == null) return Stream.value([]);

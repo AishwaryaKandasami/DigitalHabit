@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../planner/domain/task_category.dart';
 
-/// Parent's qualitative feedback on a verified task.
-enum ParentFeedback { positive, negative }
-
+/// A record that a child completed a planned task. Rewards are granted on
+/// completion — there is no parent verification step in the single-login model.
 class TaskLogModel {
   final String id;
   final String planId;
@@ -15,14 +14,8 @@ class TaskLogModel {
   final bool isHealthy;
   final DateTime completedAt;
   final bool completedByChild;
-  final bool? verifiedByParent; // null = not yet reviewed
   final int coinsEarned;
   final int xpEarned;
-  final ParentFeedback? parentFeedback;
-  final String? parentComment;
-  /// True once the kid has seen the parent's review on this log.
-  /// Used to drive the "new feedback" badge on the dashboard.
-  final bool seenByChild;
 
   const TaskLogModel({
     required this.id,
@@ -35,19 +28,9 @@ class TaskLogModel {
     required this.isHealthy,
     required this.completedAt,
     this.completedByChild = true,
-    this.verifiedByParent,
     required this.coinsEarned,
     required this.xpEarned,
-    this.parentFeedback,
-    this.parentComment,
-    this.seenByChild = false,
   });
-
-  bool get isPendingVerification => verifiedByParent == null;
-  bool get isVerified => verifiedByParent == true;
-
-  /// Has the parent reviewed it and the kid hasn't acknowledged yet?
-  bool get hasUnreadFeedback => verifiedByParent != null && !seenByChild;
 
   Map<String, dynamic> toMap() => {
         'planId': planId,
@@ -59,12 +42,8 @@ class TaskLogModel {
         'isHealthy': isHealthy,
         'completedAt': Timestamp.fromDate(completedAt),
         'completedByChild': completedByChild,
-        'verifiedByParent': verifiedByParent,
         'coinsEarned': coinsEarned,
         'xpEarned': xpEarned,
-        'parentFeedback': parentFeedback?.name,
-        'parentComment': parentComment,
-        'seenByChild': seenByChild,
       };
 
   factory TaskLogModel.fromMap(String id, Map<String, dynamic> map) =>
@@ -79,13 +58,7 @@ class TaskLogModel {
         isHealthy: map['isHealthy'] as bool,
         completedAt: (map['completedAt'] as Timestamp).toDate(),
         completedByChild: map['completedByChild'] as bool? ?? true,
-        verifiedByParent: map['verifiedByParent'] as bool?,
         coinsEarned: map['coinsEarned'] as int? ?? 0,
         xpEarned: map['xpEarned'] as int? ?? 0,
-        parentFeedback: map['parentFeedback'] != null
-            ? ParentFeedback.values.byName(map['parentFeedback'] as String)
-            : null,
-        parentComment: map['parentComment'] as String?,
-        seenByChild: map['seenByChild'] as bool? ?? false,
       );
 }

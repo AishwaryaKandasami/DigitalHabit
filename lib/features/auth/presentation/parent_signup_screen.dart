@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -10,6 +11,8 @@ import '../../family/providers/family_providers.dart';
 import '../../shop/providers/shop_providers.dart';
 import '../domain/app_user.dart';
 
+/// Create the single family account, the first child profile, and the
+/// grown-up PIN — all in one step. No separate child logins.
 class ParentSignupScreen extends ConsumerStatefulWidget {
   const ParentSignupScreen({super.key});
 
@@ -22,6 +25,8 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _familyNameController = TextEditingController();
+  final _childNameController = TextEditingController();
+  final _pinController = TextEditingController();
   bool _isLoading = false;
   String? _error;
 
@@ -30,7 +35,15 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _familyNameController.dispose();
+    _childNameController.dispose();
+    _pinController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshAppUser() async {
+    ref.invalidate(appUserProvider);
+    await ref.read(appUserProvider.future);
+    ref.invalidate(familyMembersProvider);
   }
 
   Future<void> _signUp() async {
@@ -46,39 +59,26 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
 
       User user;
       try {
-        // 1. Try creating a new account
         user = await authRepo.signUpParent(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          // Account exists — try signing in instead
+          // Account exists — sign in and recover/route instead of duplicating.
           try {
             user = await authRepo.signIn(
               _emailController.text.trim(),
               _passwordController.text,
             );
-
-            // Check if they already have a profile
-            final existing = await authRepo.getUserProfile(user.uid);
+            final existing = await authRepo.getUserProfile(user.uid) ??
+                await authRepo.recoverUserProfile(user);
             if (existing != null && existing.familyId != null) {
-              // Already fully set up — just go to dashboard
-              ref.invalidate(appUserProvider);
-              await ref.read(appUserProvider.future);
-              if (mounted) context.go('/parent');
+              await _refreshAppUser();
+              if (mounted) context.go('/kid');
               return;
             }
-            // Profile doc missing — try to recover from existing family data
-            // before creating a duplicate family.
-            final recovered = await authRepo.recoverUserProfile(user);
-            if (recovered != null && recovered.familyId != null) {
-              ref.invalidate(appUserProvider);
-              await ref.read(appUserProvider.future);
-              if (mounted) context.go('/parent');
-              return;
-            }
-            // Nothing to recover — continue to create family below
+            // Nothing to recover — fall through to create the family.
           } catch (_) {
             setState(() => _error =
                 'This email is already registered. Try logging in with the correct password.');
@@ -89,37 +89,35 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
         }
       }
 
-      // 2. Create family in Firestore
+      // 1. Create the family (with the grown-up PIN).
       final family = await familyRepo.createFamily(
         name: _familyNameController.text.trim(),
         parentUid: user.uid,
+        grownupPin: _pinController.text.trim(),
       );
 
-      // 3. Create parent member in family
-      final member = await familyRepo.addMember(
+      // 2. Create the first child profile (no auth account).
+      final child = await familyRepo.addMember(
         familyId: family.id,
-        displayName: 'Parent',
-        role: UserRole.parent,
-        authUid: user.uid,
+        displayName: _childNameController.text.trim(),
+        role: UserRole.child,
       );
 
-      // 4. Seed shop items for the new family
+      // 3. Seed shop items.
       await ref.read(shopRepositoryProvider).seedShopItems(family.id);
 
-      // 5. Save user profile mapping
+      // 4. Save the account → family mapping.
       await authRepo.saveUserProfile(AppUser(
         uid: user.uid,
         email: user.email,
         familyId: family.id,
-        memberId: member.id,
-        role: UserRole.parent,
       ));
 
-      // 6. Invalidate providers and wait for refetch
-      ref.invalidate(appUserProvider);
-      await ref.read(appUserProvider.future);
+      // 5. Refresh, select the new child, go pick their creature.
+      await _refreshAppUser();
+      ref.read(activeMemberIdProvider.notifier).set(child.id);
 
-      if (mounted) context.go('/parent');
+      if (mounted) context.go('/choose-avatar');
     } catch (e) {
       setState(() => _error = _friendlyError(e.toString()));
     } finally {
@@ -143,7 +141,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Parent Sign Up')),
+      appBar: AppBar(title: const Text('Create Your Family')),
       body: _isLoading
           ? const LoadingWidget(message: 'Setting up your family...')
           : SingleChildScrollView(
@@ -153,18 +151,21 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Create Your Family', style: AppTextStyles.heading2),
+                    Text('Welcome!', style: AppTextStyles.heading2),
                     const SizedBox(height: 8),
                     Text(
-                      'Set up your account and family to get started.',
+                      'One login for the whole family. Your kids each get a '
+                      'profile — no separate passwords.',
                       style: AppTextStyles.body
                           .copyWith(color: AppColors.textSecondary),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
+                    Text('Grown-up account', style: AppTextStyles.label),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailController,
                       decoration: const InputDecoration(
-                        labelText: 'Email',
+                        labelText: 'Your email',
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                       keyboardType: TextInputType.emailAddress,
@@ -190,9 +191,38 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                     TextFormField(
                       controller: _familyNameController,
                       decoration: const InputDecoration(
-                        labelText: 'Family Name',
+                        labelText: 'Family name',
                         hintText: 'e.g. The Smiths',
                         prefixIcon: Icon(Icons.family_restroom),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _pinController,
+                      decoration: const InputDecoration(
+                        labelText: 'Grown-up PIN (4 digits)',
+                        hintText: 'Keeps kids out of settings',
+                        prefixIcon: Icon(Icons.pin_outlined),
+                      ),
+                      keyboardType: TextInputType.number,
+                      obscureText: true,
+                      maxLength: 4,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      validator: (v) =>
+                          v == null || v.length != 4 ? 'Enter 4 digits' : null,
+                    ),
+                    const SizedBox(height: 20),
+                    Text('First child', style: AppTextStyles.label),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _childNameController,
+                      decoration: const InputDecoration(
+                        labelText: "Child's name",
+                        prefixIcon: Icon(Icons.child_care),
                       ),
                       validator: (v) =>
                           v == null || v.trim().isEmpty ? 'Required' : null,
@@ -204,7 +234,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                         style: const TextStyle(color: AppColors.accentRed),
                       ),
                     ],
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
                     ElevatedButton(
                       onPressed: _signUp,
                       child: const Text('Create Family'),
