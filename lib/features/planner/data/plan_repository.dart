@@ -8,32 +8,35 @@ class PlanRepository {
   PlanRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  /// Create or update a plan.
+  /// Create or update a plan, keyed by (memberId, weekStart).
+  ///
+  /// We resolve the target doc by querying for this child's plan for the week
+  /// rather than trusting `plan.id`. This guarantees exactly one plan doc per
+  /// (child, week) and makes it impossible for one child's save to overwrite
+  /// another child's plan (the queries can't cross member boundaries).
   Future<PlanModel> savePlan(String familyId, PlanModel plan) async {
-    if (plan.id.isEmpty) {
-      // Create new
-      final docRef =
-          _firestore.collection(FirestorePaths.plans(familyId)).doc();
-      final newPlan = PlanModel(
-        id: docRef.id,
-        memberId: plan.memberId,
-        weekStart: plan.weekStart,
-        status: plan.status,
-        parentNote: plan.parentNote,
-        submittedAt: plan.submittedAt,
-        reviewedAt: plan.reviewedAt,
-        days: plan.days,
-      );
-      await docRef.set(newPlan.toMap());
-      return newPlan;
-    } else {
-      // Update existing
-      await _firestore
-          .collection(FirestorePaths.plans(familyId))
-          .doc(plan.id)
-          .set(plan.toMap());
-      return plan;
-    }
+    final existing = await _firestore
+        .collection(FirestorePaths.plans(familyId))
+        .where('memberId', isEqualTo: plan.memberId)
+        .where('weekStart', isEqualTo: plan.weekStart)
+        .limit(1)
+        .get();
+    final docRef = existing.docs.isNotEmpty
+        ? existing.docs.first.reference
+        : _firestore.collection(FirestorePaths.plans(familyId)).doc();
+
+    final saved = PlanModel(
+      id: docRef.id,
+      memberId: plan.memberId,
+      weekStart: plan.weekStart,
+      status: plan.status,
+      parentNote: plan.parentNote,
+      submittedAt: plan.submittedAt,
+      reviewedAt: plan.reviewedAt,
+      days: plan.days,
+    );
+    await docRef.set(saved.toMap());
+    return saved;
   }
 
   /// Get plan for a specific member and week.

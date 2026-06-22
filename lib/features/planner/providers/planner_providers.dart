@@ -52,7 +52,14 @@ final allPlansProvider = StreamProvider<List<PlanModel>>((ref) {
 /// Local draft plan for editing (before saving to Firestore).
 class DraftPlanNotifier extends Notifier<PlanModel?> {
   @override
-  PlanModel? build() => null;
+  PlanModel? build() {
+    // Discard the draft whenever the active child changes, so one kid's
+    // in-progress edits can never leak into another kid's plan.
+    ref.listen(activeMemberIdProvider, (prev, next) {
+      if (prev != next) state = null;
+    });
+    return null;
+  }
 
   void set(PlanModel? plan) => state = plan;
 
