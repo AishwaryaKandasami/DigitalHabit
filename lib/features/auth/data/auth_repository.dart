@@ -36,6 +36,14 @@ class AuthRepository {
     return credential.user!;
   }
 
+  /// Guest / explore mode: an anonymous session so someone can try the app
+  /// without creating an account. Guest data lives only on this device and
+  /// can't be recovered elsewhere.
+  Future<User> signInAnonymously() async {
+    final credential = await _auth.signInAnonymously();
+    return credential.user!;
+  }
+
   /// Send a password reset email for the (grown-up) family account.
   Future<void> sendPasswordResetEmail(String email) async {
     await _auth.sendPasswordResetEmail(email: email);
