@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../family/presentation/add_child_dialog.dart';
 import '../../family/providers/family_providers.dart';
+import '../providers/auth_providers.dart';
 
 /// "Who's playing?" — pick the active child profile (single login, many kids).
 class ProfilePickerScreen extends ConsumerWidget {
@@ -45,6 +48,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                           context.go('/kid');
                         },
                       ),
+                    _AddProfileCard(onTap: () => _addChild(context, ref)),
                   ],
                 ),
               ),
@@ -56,6 +60,51 @@ class ProfilePickerScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addChild(BuildContext context, WidgetRef ref) async {
+    final familyId = ref.read(appUserProvider).value?.familyId;
+    if (familyId == null) return;
+    final newId = await showDialog<String>(
+      context: context,
+      builder: (_) => AddChildDialog(familyId: familyId),
+    );
+    // Auto-select the newly added child and jump in.
+    if (newId != null && context.mounted) {
+      ref.read(activeMemberIdProvider.notifier).set(newId);
+      context.go('/kid');
+    }
+  }
+}
+
+class _AddProfileCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddProfileCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.textSecondary.withAlpha(80),
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_circle_outline,
+                size: 56, color: AppColors.textSecondary.withAlpha(150)),
+            const SizedBox(height: 8),
+            Text('Add a child', style: AppTextStyles.bodyBold),
+          ],
         ),
       ),
     );
