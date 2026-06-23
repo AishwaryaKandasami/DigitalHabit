@@ -161,7 +161,7 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => context.go('/kid/avatar'),
+                onPressed: () => context.go('/kid/garden/creature'),
                 child: const Text('Back to my avatar'),
               ),
             ],
@@ -232,7 +232,7 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
             if (isEditMode) ...[
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => context.go('/kid/avatar'),
+                onPressed: () => context.go('/kid/garden/creature'),
                 child: const Text('Cancel'),
               ),
             ],

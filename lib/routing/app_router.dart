@@ -9,6 +9,7 @@ import '../features/auth/presentation/profile_picker_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/avatar/presentation/choose_avatar_screen.dart';
 import '../features/avatar/presentation/avatar_screen.dart';
+import '../features/garden/presentation/garden_screen.dart';
 import '../features/dashboard/presentation/kid_dashboard_screen.dart';
 import '../features/family/presentation/grownup_gate_screen.dart';
 import '../features/family/presentation/family_management_screen.dart';
@@ -92,7 +93,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                     icon: Icon(Icons.calendar_month), label: 'Planner'),
                 NavigationDestination(
                     icon: Icon(Icons.shopping_bag), label: 'Shop'),
-                NavigationDestination(icon: Icon(Icons.pets), label: 'Garden'),
+                NavigationDestination(
+                    icon: Icon(Icons.local_florist), label: 'Garden'),
               ],
             ),
           );
@@ -130,7 +132,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/kid/avatar', builder: (_, _) => const AvatarScreen()),
+              path: '/kid/garden',
+              builder: (_, _) => const GardenScreen(),
+              routes: [
+                GoRoute(
+                  path: 'creature',
+                  builder: (_, _) => const AvatarScreen(),
+                ),
+              ],
+            ),
           ]),
         ],
       ),

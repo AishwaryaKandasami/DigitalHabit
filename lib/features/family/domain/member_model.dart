@@ -14,6 +14,14 @@ class MemberModel {
   final int streakDays;
   final String? lastActiveDate;
 
+  /// Cumulative days each habit category was completed — grows that habit's
+  /// garden plant. Monotonic; never decreases.
+  final Map<String, int> gardenDays;
+
+  /// Last date (ISO yyyy-MM-dd) each category's garden day was counted, so a
+  /// plant grows at most once per day per habit.
+  final Map<String, String> gardenLastDate;
+
   const MemberModel({
     required this.id,
     required this.displayName,
@@ -25,6 +33,8 @@ class MemberModel {
     this.inventory = const InventoryModel(),
     this.streakDays = 0,
     this.lastActiveDate,
+    this.gardenDays = const {},
+    this.gardenLastDate = const {},
   });
 
   Map<String, dynamic> toMap() => {
@@ -37,6 +47,8 @@ class MemberModel {
         'inventory': inventory.toList(),
         'streakDays': streakDays,
         'lastActiveDate': lastActiveDate,
+        'gardenDays': gardenDays,
+        'gardenLastDate': gardenLastDate,
       };
 
   factory MemberModel.fromMap(String id, Map<String, dynamic> map) =>
@@ -54,6 +66,12 @@ class MemberModel {
             InventoryModel.fromList(map['inventory'] as List<dynamic>?),
         streakDays: map['streakDays'] as int? ?? 0,
         lastActiveDate: map['lastActiveDate'] as String?,
+        gardenDays: (map['gardenDays'] as Map?)
+                ?.map((k, v) => MapEntry(k as String, (v as num).toInt())) ??
+            const {},
+        gardenLastDate: (map['gardenLastDate'] as Map?)
+                ?.map((k, v) => MapEntry(k as String, v as String)) ??
+            const {},
       );
 
   MemberModel copyWith({
@@ -64,6 +82,8 @@ class MemberModel {
     InventoryModel? inventory,
     int? streakDays,
     String? lastActiveDate,
+    Map<String, int>? gardenDays,
+    Map<String, String>? gardenLastDate,
   }) {
     return MemberModel(
       id: id,
@@ -76,6 +96,8 @@ class MemberModel {
       inventory: inventory ?? this.inventory,
       streakDays: streakDays ?? this.streakDays,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
+      gardenDays: gardenDays ?? this.gardenDays,
+      gardenLastDate: gardenLastDate ?? this.gardenLastDate,
     );
   }
 }

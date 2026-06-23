@@ -88,12 +88,22 @@ class TaskLogRepository {
 
       txn.set(logRef, log.toMap());
 
-      txn.update(memberRef, {
+      final memberUpdates = <String, dynamic>{
         'wallet.coins': FieldValue.increment(reward.coins),
         'wallet.totalEarned': FieldValue.increment(reward.coins),
         'avatarState': updatedAvatar.toMap(),
         'lastActiveDate': date,
-      });
+      };
+
+      // Grow this habit's garden plant — at most once per day per category,
+      // and only for healthy tasks. Rides this existing write (no extra call).
+      final categoryName = task.category.name;
+      if (task.isHealthy && member.gardenLastDate[categoryName] != date) {
+        memberUpdates['gardenDays.$categoryName'] = FieldValue.increment(1);
+        memberUpdates['gardenLastDate.$categoryName'] = date;
+      }
+
+      txn.update(memberRef, memberUpdates);
 
       txn.set(
           txRef,
