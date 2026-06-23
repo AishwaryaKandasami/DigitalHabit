@@ -30,20 +30,21 @@ void main() {
       expect(updated.evolutionStage, 2);
     });
 
-    test('applyMoodChange clamps between 0 and 100', () {
-      const state = AvatarState(moodScore: 5);
+    test('applyMoodChange floors at the sad threshold and caps at 100', () {
+      // All-positive tone: mood never drops below moodSadThreshold (25).
+      const state = AvatarState(moodScore: 30);
       final decreased = EvolutionCalculator.applyMoodChange(state, -10);
-      expect(decreased.moodScore, 0);
+      expect(decreased.moodScore, 25);
 
       const highState = AvatarState(moodScore: 95);
       final increased = EvolutionCalculator.applyMoodChange(highState, 10);
       expect(increased.moodScore, 100);
     });
 
-    test('applyMoodDecay reduces mood per day missed', () {
+    test('applyMoodDecay does not reduce mood (all-positive: no guilt)', () {
       const state = AvatarState(moodScore: 75);
       final decayed = EvolutionCalculator.applyMoodDecay(state, 3);
-      expect(decayed.moodScore, 60);
+      expect(decayed.moodScore, 75);
     });
 
     test('healthDelta returns correct values based on ratio', () {
