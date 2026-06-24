@@ -98,8 +98,6 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
 
   String get _stageEmoji {
     switch (_a.evolutionStage) {
-      case 1:
-        return '🥚';
       case 5:
         return '✨${_a.creatureType.emoji}✨';
       default:
@@ -110,7 +108,7 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
   double get _emojiSize {
     switch (_a.evolutionStage) {
       case 1:
-        return widget.size * 0.3;
+        return widget.size * 0.34;
       case 2:
         return widget.size * 0.35;
       case 3:
@@ -159,7 +157,7 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
 
   /// Warm one-liner the creature "says". Always positive — never guilt.
   String get _moodNote {
-    if (_a.evolutionStage == 1) return 'Keep me warm! 🥚';
+    if (_a.evolutionStage == 1) return "I'm just a baby! 💛";
     final mood = _a.moodScore;
     if (mood >= GameConstants.moodHappyThreshold) return 'WOW! So happy! 💛';
     if (mood >= GameConstants.moodNeutralThreshold) return 'Feeling good!';
@@ -210,17 +208,15 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(_stageEmoji, style: TextStyle(fontSize: _emojiSize)),
-              if (_a.evolutionStage > 1) ...[
-                const SizedBox(height: 4),
-                Text(
-                  _a.moodLabel,
-                  style: TextStyle(
-                    fontSize: size * 0.07,
-                    color: _glowColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                _a.moodLabel,
+                style: TextStyle(
+                  fontSize: size * 0.07,
+                  color: _glowColor,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
+              ),
             ],
           ),
           // Equipped accessories worn near the top of the creature.

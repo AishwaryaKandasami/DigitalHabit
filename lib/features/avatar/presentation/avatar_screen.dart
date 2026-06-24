@@ -126,7 +126,7 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Egg-stage only: let kid change creature before it hatches
+            // Baby-stage only: let kid change creature before it grows up
             if (avatar.evolutionStage == 1) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -135,7 +135,7 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
                 label: const Text('Change my creature'),
               ),
               Text(
-                'You can change your creature until your egg hatches.',
+                'You can change your creature until your baby grows up.',
                 style: AppTextStyles.caption,
                 textAlign: TextAlign.center,
               ),

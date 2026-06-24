@@ -122,13 +122,13 @@ memberId, type: "earn"|"spend", amount, reason, itemId, createdAt
 ### Evolution Stages (XP-based)
 | Stage | Name | Cumulative XP |
 |-------|------|---------------|
-| 1 | Egg | 0 |
-| 2 | Baby | 100 |
+| 1 | Baby | 0 |
+| 2 | Young | 100 |
 | 3 | Teen | 500 |
 | 4 | Adult | 1,500 |
 | 5 | Legendary | 4,000 |
 
-5 creature types: Fire Fox, Water Dragon, Earth Bunny, Wind Owl, Star Cat.
+11 creature types: Fire Fox, Water Dragon, Earth Bunny, Wind Owl, Star Cat, Leaf Panda, Thunder Wolf, Frost Penguin, Sky Robin, Bumble Bee, Garden Butterfly.
 
 ### XP Earning
 | Action | XP |

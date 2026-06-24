@@ -85,7 +85,7 @@ class _AddChildDialogState extends ConsumerState<AddChildDialog> {
               const SizedBox(height: 16),
               Text('Starter creature (optional)', style: AppTextStyles.label),
               const SizedBox(height: 4),
-              Text('They can change it later while it\'s still an egg.',
+              Text('They can change it later while it\'s still a baby.',
                   style: AppTextStyles.caption),
               const SizedBox(height: 8),
               Wrap(

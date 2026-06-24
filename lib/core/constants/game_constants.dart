@@ -4,8 +4,8 @@ class GameConstants {
   // --- Evolution XP Thresholds (cumulative) ---
   static const List<int> evolutionXpThresholds = [0, 100, 500, 1500, 4000];
   static const List<String> evolutionStageNames = [
-    'Egg',
     'Baby',
+    'Young',
     'Teen',
     'Adult',
     'Legendary',

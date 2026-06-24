@@ -79,15 +79,15 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
       final familyRepo = ref.read(familyRepositoryProvider);
 
-      // Edit-mode safety: if the member already exists and has hatched past
-      // the egg, refuse to overwrite. (Shouldn't normally reach here because
+      // Edit-mode safety: if the member already exists and has grown past the
+      // baby stage, refuse to overwrite. (Shouldn't normally reach here because
       // the entry button is hidden, but don't trust the client.)
       if (currentMember.avatarState.evolutionStage > 1) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Your creature already hatched — it can\'t be changed now.'),
+                  'Your creature already grew up — it can\'t be changed now.'),
             ),
           );
         }
@@ -128,16 +128,16 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
 
     if (_isLoading) {
       return const Scaffold(
-        body: LoadingWidget(message: 'Hatching your creature...'),
+        body: LoadingWidget(message: 'Waking up your creature...'),
       );
     }
 
-    // If the kid has already hatched, block the edit flow with a friendly
-    // message instead of allowing silent overwrite.
+    // If the kid's creature has already grown up, block the edit flow with a
+    // friendly message instead of allowing silent overwrite.
     final member = ref.watch(currentMemberProvider);
-    final alreadyHatched =
+    final alreadyGrownUp =
         member != null && member.avatarState.evolutionStage > 1;
-    if (alreadyHatched) {
+    if (alreadyGrownUp) {
       return Scaffold(
         appBar: AppBar(title: const Text('Choose Your Creature')),
         body: Padding(
@@ -149,7 +149,7 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
                   size: 64, color: AppColors.textSecondary),
               const SizedBox(height: 16),
               Text(
-                'Your creature already hatched!',
+                'Your creature already grew up!',
                 style: AppTextStyles.heading2,
                 textAlign: TextAlign.center,
               ),
@@ -190,7 +190,7 @@ class _ChooseAvatarScreenState extends ConsumerState<ChooseAvatarScreen> {
             const SizedBox(height: 8),
             Text(
               isEditMode
-                  ? 'You can change your creature until it hatches. Your XP, coins and items stay the same.'
+                  ? 'You can change your creature until it grows up. Your XP, coins and items stay the same.'
                   : 'Your creature will grow as you build healthy habits.',
               style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
