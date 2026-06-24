@@ -141,7 +141,7 @@ class _MemberTile extends StatelessWidget {
         leading: CircleAvatar(
           backgroundColor: avatar.creatureType.color.withAlpha(40),
           child: Text(
-            avatar.evolutionStage == 1 ? '🥚' : avatar.creatureType.emoji,
+            avatar.creatureType.emoji,
             style: const TextStyle(fontSize: 20),
           ),
         ),

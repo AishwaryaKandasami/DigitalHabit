@@ -37,9 +37,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                     for (final child in children)
                       _ProfileCard(
                         name: child.displayName,
-                        emoji: child.avatarState.evolutionStage == 1
-                            ? '🥚'
-                            : child.avatarState.creatureType.emoji,
+                        emoji: child.avatarState.creatureType.emoji,
                         color: child.avatarState.creatureType.color,
                         onTap: () {
                           ref

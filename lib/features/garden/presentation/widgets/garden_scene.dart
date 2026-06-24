@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../../../family/providers/family_providers.dart';
 import '../../../avatar/presentation/widgets/avatar_display.dart';
 import '../../domain/garden_plant.dart';
 import '../../domain/garden_state.dart';
+import 'ambient_life.dart';
 import 'rive_plant.dart';
 
 /// The garden: a sky band with the sun (sized by streak) and the creature,
@@ -35,6 +37,7 @@ class GardenScene extends ConsumerWidget {
                 right: 18,
                 child: _Sun(streak: garden.streakDays),
               ),
+              const Positioned.fill(child: AmbientLife()),
               Align(
                 alignment: Alignment.bottomCenter,
                 child: GestureDetector(
@@ -88,8 +91,23 @@ class _Sun extends StatelessWidget {
         shape: BoxShape.circle,
         color: const Color(0xFFFAC775),
         border: Border.all(color: const Color(0xFFEF9F27), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFAC775).withAlpha(150),
+            blurRadius: 18,
+            spreadRadius: 2,
+          ),
+        ],
       ),
-    );
+    )
+        // Gentle breathing glow so the sky feels warm and alive.
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .scaleXY(
+          begin: 1.0,
+          end: 1.08,
+          duration: 2400.ms,
+          curve: Curves.easeInOut,
+        );
   }
 }
 

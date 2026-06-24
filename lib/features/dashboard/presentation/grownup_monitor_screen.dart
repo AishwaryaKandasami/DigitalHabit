@@ -199,9 +199,7 @@ class _ChildProgressCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      avatar.evolutionStage == 1
-                          ? '🥚'
-                          : avatar.creatureType.emoji,
+                      avatar.creatureType.emoji,
                       style: const TextStyle(fontSize: 26),
                     ),
                   ),
