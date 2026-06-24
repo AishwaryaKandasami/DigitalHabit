@@ -20,8 +20,6 @@ class GardenScene extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final member = ref.watch(currentMemberProvider);
-    const sky = Color(0xFFE6F1FB);
-    const grass = Color(0xFFC0DD97);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -29,7 +27,18 @@ class GardenScene extends ConsumerWidget {
         Container(
           height: 168,
           width: double.infinity,
-          color: sky,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF6ABBE8), // deep sky
+                Color(0xFFADD8F0), // mid sky
+                Color(0xFFD5EFD4), // warm horizon
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
           child: Stack(
             children: [
               Positioned(
@@ -49,15 +58,28 @@ class GardenScene extends ConsumerWidget {
                           avatarState: member.avatarState,
                           size: 104,
                           showMoodNote: false,
+                          showRing: false,
                         ),
                 ),
               ),
             ],
           ),
         ),
+        // Horizon divider
+        Container(height: 3, color: const Color(0xFF8BC34A)),
         Container(
           width: double.infinity,
-          color: grass,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF9ED160), // bright top grass
+                Color(0xFF72A832), // richer mid
+                Color(0xFF5A8C22), // shadowed bottom
+              ],
+            ),
+          ),
           padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
           child: SizedBox(
             height: 156,
@@ -133,7 +155,7 @@ class _PlotTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(plant.category.icon,
-                  size: 13, color: const Color(0xFF27500A)),
+                  size: 13, color: Colors.white),
               const SizedBox(width: 3),
               Flexible(
                 child: Text(
@@ -142,15 +164,16 @@ class _PlotTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF27500A),
-                      fontWeight: FontWeight.w500),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
           Text(
             '${plant.days} day${plant.days == 1 ? '' : 's'}',
-            style: const TextStyle(fontSize: 10, color: Color(0xFF3B6D11)),
+            style: const TextStyle(
+                fontSize: 10, color: Color(0xFFDCF5C0), fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -167,14 +190,17 @@ class _EmptyBeds extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.eco_outlined, size: 36, color: Color(0xFF3B6D11)),
+          Icon(Icons.eco_outlined, size: 36, color: Colors.white70),
           SizedBox(height: 8),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               'Finish your habits to plant your garden!',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Color(0xFF27500A)),
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500),
             ),
           ),
         ],

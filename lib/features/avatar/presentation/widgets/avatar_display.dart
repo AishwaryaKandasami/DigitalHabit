@@ -36,11 +36,16 @@ class AvatarDisplay extends StatefulWidget {
   /// Called when the kid taps (pets) the creature.
   final VoidCallback? onTapPet;
 
+  /// Whether to draw the circular ring + glow. Set false in the garden scene
+  /// so the creature floats over the sky without a hard border.
+  final bool showRing;
+
   const AvatarDisplay({
     super.key,
     required this.avatarState,
     this.size = 200,
     this.showMoodNote = true,
+    this.showRing = true,
     this.messageOverride,
     this.messageFromName,
     this.onMessageTap,
@@ -174,18 +179,20 @@ class _AvatarDisplayState extends State<AvatarDisplay> {
     final circle = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: _a.creatureType.color.withAlpha(30),
-        border: Border.all(color: _glowColor.withAlpha(100), width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: _glowColor.withAlpha(40),
-            blurRadius: 20,
-            spreadRadius: 5,
-          ),
-        ],
-      ),
+      decoration: widget.showRing
+          ? BoxDecoration(
+              shape: BoxShape.circle,
+              color: _a.creatureType.color.withAlpha(30),
+              border: Border.all(color: _glowColor.withAlpha(100), width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: _glowColor.withAlpha(40),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            )
+          : const BoxDecoration(),
       child: Stack(
         alignment: Alignment.center,
         children: [
