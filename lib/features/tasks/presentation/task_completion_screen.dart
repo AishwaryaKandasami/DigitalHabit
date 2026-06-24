@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/animated_progress_ring.dart';
 import '../../../core/widgets/loading_widget.dart';
 import '../../planner/domain/plan_model.dart';
 import '../../planner/domain/task_model.dart';
@@ -94,30 +95,11 @@ class TaskCompletionScreen extends ConsumerWidget {
                 color: AppColors.primary.withAlpha(15),
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 6,
-                            backgroundColor: AppColors.surfaceVariant,
-                            valueColor: AlwaysStoppedAnimation(
-                              progress >= 1.0
-                                  ? AppColors.accentGreen
-                                  : AppColors.primary,
-                            ),
-                          ),
-                          Center(
-                            child: Text(
-                              '${(progress * 100).round()}%',
-                              style: AppTextStyles.bodyBold,
-                            ),
-                          ),
-                        ],
-                      ),
+                    AnimatedProgressRing(
+                      progress: progress,
+                      size: 60,
+                      strokeWidth: 6,
+                      labelStyle: AppTextStyles.bodyBold,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -153,7 +135,16 @@ class TaskCompletionScreen extends ConsumerWidget {
                       onComplete: isDone
                           ? null
                           : () => _completeTask(context, ref, plan, task),
-                    );
+                    )
+                        .animate()
+                        .fadeIn(
+                            duration: 300.ms,
+                            delay: (50 * (index.clamp(0, 8))).ms)
+                        .slideX(
+                            begin: 0.08,
+                            duration: 300.ms,
+                            delay: (50 * (index.clamp(0, 8))).ms,
+                            curve: Curves.easeOut);
                   },
                 ),
               ),
@@ -306,6 +297,12 @@ class _TaskTile extends StatelessWidget {
         ),
         trailing: isDone
             ? const Icon(Icons.check_circle, color: AppColors.accentGreen)
+                .animate()
+                .scaleXY(
+                    begin: 0.0,
+                    end: 1.0,
+                    duration: 400.ms,
+                    curve: Curves.elasticOut)
             : FilledButton(
                 onPressed: onComplete,
                 style: FilledButton.styleFrom(

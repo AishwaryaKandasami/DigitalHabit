@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/animated_progress_ring.dart';
 import '../../../core/widgets/coin_badge.dart';
 import '../../../core/widgets/xp_bar.dart';
 import '../../family/providers/family_providers.dart';
@@ -90,8 +92,19 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.local_fire_department,
-                              color: AppColors.accent, size: 18),
+                          // A lit, flickering flame while a streak is alive.
+                          member.streakDays > 0
+                              ? const Icon(Icons.local_fire_department,
+                                      color: AppColors.accent, size: 18)
+                                  .animate(
+                                      onPlay: (c) => c.repeat(reverse: true))
+                                  .scaleXY(
+                                      begin: 0.9,
+                                      end: 1.18,
+                                      duration: 800.ms,
+                                      curve: Curves.easeInOut)
+                              : const Icon(Icons.local_fire_department,
+                                  color: AppColors.accent, size: 18),
                           const SizedBox(width: 4),
                           Text(
                             '${member.streakDays} day streak',
@@ -186,29 +199,7 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 70,
-                        height: 70,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CircularProgressIndicator(
-                              value: progress,
-                              strokeWidth: 7,
-                              backgroundColor: AppColors.surfaceVariant,
-                              valueColor: AlwaysStoppedAnimation(
-                                progress >= 1.0
-                                    ? AppColors.accentGreen
-                                    : AppColors.primary,
-                              ),
-                            ),
-                            Center(
-                              child: Text('${(progress * 100).round()}%',
-                                  style: AppTextStyles.heading3),
-                            ),
-                          ],
-                        ),
-                      ),
+                      AnimatedProgressRing(progress: progress),
                       const SizedBox(width: 20),
                       Expanded(
                         child: Column(
@@ -289,7 +280,9 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                 )
               else
                 // Show up to 5 tasks inline
-                ...todayTasks.take(5).map((task) {
+                ...todayTasks.take(5).toList().asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final task = entry.value;
                   final isDone = completedTaskIds.contains(task.taskId);
                   final timeStr =
                       '${task.hour.toString().padLeft(2, '0')}:${task.minute.toString().padLeft(2, '0')}';
@@ -328,12 +321,25 @@ class _KidDashboardScreenState extends ConsumerState<KidDashboardScreen> {
                           style: AppTextStyles.caption),
                       trailing: isDone
                           ? const Icon(Icons.check_circle,
-                              color: AppColors.accentGreen, size: 24)
+                                  color: AppColors.accentGreen, size: 24)
+                              .animate()
+                              .scaleXY(
+                                  begin: 0.0,
+                                  end: 1.0,
+                                  duration: 400.ms,
+                                  curve: Curves.elasticOut)
                           : _QuickDoneButton(
                               onPressed: () => _completeTask(plan!, task),
                             ),
                     ),
-                  );
+                  )
+                      .animate()
+                      .fadeIn(duration: 300.ms, delay: (60 * index).ms)
+                      .slideX(
+                          begin: 0.08,
+                          duration: 300.ms,
+                          delay: (60 * index).ms,
+                          curve: Curves.easeOut);
                 }),
             ],
           ),
